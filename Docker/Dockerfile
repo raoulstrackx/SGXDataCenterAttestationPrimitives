@@ -28,8 +28,7 @@ RUN ls linux/installer/bin
 
 USER root
 RUN apt-get install -y pkg-config
-RUN bash -c "echo yes | ./linux/installer/bin/sgx_linux_x64_sdk_2.17.101.1.bin"
-
+RUN bash -c "echo yes | ./$(find linux/installer/bin/ -name 'sgx_linux_x64_sdk*')"
 
 # Install SGX DCAP primitives
 USER root
