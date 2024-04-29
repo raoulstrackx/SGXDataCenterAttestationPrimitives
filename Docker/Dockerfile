@@ -12,7 +12,7 @@ WORKDIR /home/raoul
 
 # Install SGX Dev tools
 USER root
-RUN DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y build-essential ocaml ocamlbuild automake autoconf libtool wget python-is-python3 libssl-dev git cmake perl unzip
+RUN DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y build-essential ocaml ocamlbuild automake autoconf libtool wget python-is-python3 libssl-dev git cmake perl unzip libboost-dev libboost-system-dev libboost-thread-dev
 
 USER raoul
 RUN git clone https://github.com/intel/linux-sgx.git
@@ -38,6 +38,7 @@ RUN apt-get install -y libcurl4-openssl-dev
 USER raoul
 RUN git clone https://github.com/intel/SGXDataCenterAttestationPrimitives.git
 WORKDIR SGXDataCenterAttestationPrimitives
+RUN git submodule update  --init
 RUN source /home/raoul/linux-sgx/sgxsdk/environment && make
 
 WORKDIR tools/PCKCertSelection
