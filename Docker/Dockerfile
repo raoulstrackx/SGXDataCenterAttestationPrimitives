@@ -39,6 +39,7 @@ USER raoul
 RUN git clone https://github.com/intel/SGXDataCenterAttestationPrimitives.git
 WORKDIR SGXDataCenterAttestationPrimitives
 RUN git submodule update  --init
+RUN QuoteGeneration/download_prebuilt.sh
 RUN source /home/raoul/linux-sgx/sgxsdk/environment && make
 
 WORKDIR tools/PCKCertSelection
@@ -49,6 +50,8 @@ RUN make
 
 USER root
 RUN apt-get install -y debhelper
+# Bugfix: The `make deb_pkg` command results in a check whether systemd is installed
+RUN mkdir -p /run/systemd/system/
 USER raoul
 WORKDIR ../../tools/SGXPlatformRegistration
 RUN source /home/raoul/linux-sgx/sgxsdk/environment && make
