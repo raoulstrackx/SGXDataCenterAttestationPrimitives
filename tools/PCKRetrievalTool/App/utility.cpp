@@ -52,6 +52,7 @@
 #include <openssl/rsa.h>     // For RSA functions
 #include <openssl/pem.h> 
 #include <iostream>
+#include <vector>
 
 #ifndef MAX_PATH
 #define MAX_PATH 260
@@ -183,6 +184,45 @@ RSA* load_public_key_from_memory(const char* key_pem) {
 }
 
 
+RSA* load_private_key_from_memory(const char* key_pem) {
+    BIO* bio = BIO_new_mem_buf(key_pem, -1);
+    if (!bio) {
+        std::cerr << "Error creating BIO buffer." << std::endl;
+        return nullptr;
+    }
+
+    RSA* rsa_private_key = PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+
+    if (!rsa_private_key) {
+        std::cerr << "Error loading private key from memory." << std::endl;
+        return nullptr;
+    }
+
+    return rsa_private_key;
+}
+
+std::vector<unsigned char> decrypt_data(RSA* rsa_private_key, const std::vector<unsigned char>& encrypted_data) {
+    std::vector<unsigned char> decrypted_data(RSA_size(rsa_private_key));
+
+    int result_len = RSA_private_decrypt(
+        encrypted_data.size(),
+        encrypted_data.data(),
+        decrypted_data.data(),
+        rsa_private_key,
+        RSA_PKCS1_OAEP_PADDING
+    );
+
+    if (result_len == -1) {
+        std::cerr << "Error during decryption." << std::endl;
+        return std::vector<unsigned char>();
+    }
+
+    // Resize decrypted data to actual length
+    decrypted_data.resize(result_len);
+
+    return decrypted_data;
+}
 
 #ifdef _MSC_VER
 bool get_program_path(TCHAR *p_file_path, size_t buf_size)
@@ -624,6 +664,61 @@ int generate_quote(uint8_t **quote_buffer, uint32_t& quote_size)
 #else
 int collect_data(uint8_t **pp_data_buffer)
 {
+        const char* private_key_pem = R"(-----BEGIN PRIVATE KEY-----
+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
+nvld+W+urv1bTEzbASAq5lwE
+-----END PRIVATE KEY-----
+)";
+
+const char* public_key_pem = R"(-----BEGIN PUBLIC KEY-----
+MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAts/jU3KtghO8rKdwPGrd
+BW4S0YgcrcrWLRF4+pARxyQFGR5+M77Woxb1xzhfACA4wNhpV7maa8nRmNACahP5
+akNXRwevkfC+VN0Be6hVzHa0FvmTrCoi94cR1Y5ZfY0RRa5MY3Hu7w5iHfnMb3U5
+nBNCE48KpvSa/cMscp4BVVUnvqb36pSBYKzCrVqy3TdthYmZrcCgHaADP8+PhnKD
+ykR6dwCmqMpeO/aB4CN70jT6xgZpjMiq1iXxgSdLRCzI4I+F3Nj6iopQTCWVCv25
+dzW+l9NicxMrGxBS6CG1XMUpROHKW48PmQV7YpV+eKRID/OFd50O3Mc/il3qs/Mc
+bkjwT340oziThk3j75dbteggBRkYY/gd27FylQpwtyDq2bkfvgOt4kGJSQ781j2l
+U03cgjz2myRiaEYogNRQV9lLtCnb+OdUpR9Nfv6mhWp8pfamDumyHCT3RWcSS7ZT
+fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
+-----END PUBLIC KEY-----
+)";
+
     sgx_status_t sgx_status = SGX_SUCCESS;
     sgx_status_t ecall_ret = SGX_SUCCESS;
     sgx_key_128bit_t platform_id = { 0 };
@@ -645,7 +740,17 @@ int collect_data(uint8_t **pp_data_buffer)
 
     sgx_get_target_info_func_t p_sgx_get_target_info = NULL;
 
-    bool load_flag = get_urts_library_handle();
+unsigned char decrypted_ppid[ENCRYPTED_PPID_LENGTH];
+int decrypted_size = -1;
+bool load_flag = false;
+RSA* rsa_private_key = load_private_key_from_memory(private_key_pem);
+if (!rsa_private_key) {
+    fprintf(stderr, "Failed to load RSA private key.\n");
+    ret = -1;
+    goto CLEANUP;
+}
+
+    load_flag = get_urts_library_handle();
     if(false == load_flag) {// can't find urts shared library to load enclave
         ret = -1;
         goto CLEANUP;
@@ -744,6 +849,22 @@ int collect_data(uint8_t **pp_data_buffer)
         ret = -1;
         goto CLEANUP;
     }
+
+// Decrypt the data using the RSA private key
+
+decrypted_size = RSA_private_decrypt(REF_RSA_OAEP_3072_MOD_SIZE,
+                                         encrypted_ppid,
+                                         decrypted_ppid,
+                                         rsa_private_key,
+                                         RSA_PKCS1_OAEP_PADDING);
+
+if (decrypted_size == -1) {
+    fprintf(stderr, "Failed to decrypt using RSA private key.\n");
+    ret = -1;
+    goto CLEANUP;
+}
+
+RSA_free(rsa_private_key);
 
     buffer_size = ENCRYPTED_PPID_LENGTH + CPU_SVN_LENGTH + ISV_SVN_LENGTH + PCE_ID_LENGTH + DEFAULT_PLATFORM_ID_LENGTH;
     *pp_data_buffer = (uint8_t *) malloc(buffer_size);
