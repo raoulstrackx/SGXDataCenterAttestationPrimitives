@@ -235,6 +235,14 @@ bool load_and_populate_key(const char* public_key_pem, uint8_t* enc_public_key) 
     return result;
 }
 
+void print_decrypted_ppid(unsigned char decrypted_ppid[], size_t length) {
+    printf("Decrypted PPID: ");
+    for (size_t i = 0; i < length; ++i) {
+        printf("%02x", decrypted_ppid[i]); // Print each byte in hex
+    }
+    printf("\n");
+}
+
 #ifdef _MSC_VER
 bool get_program_path(TCHAR *p_file_path, size_t buf_size)
 {
@@ -884,6 +892,8 @@ int collect_data(uint8_t **pp_data_buffer)
         ret = -1;
         goto CLEANUP;
     }
+
+    print_decrypted_ppid(decrypted_ppid, ENCRYPTED_PPID_LENGTH);
 
     RSA_free(rsa_private_key);
 
