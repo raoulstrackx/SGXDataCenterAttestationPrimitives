@@ -49,6 +49,9 @@
 #endif
 #include "sgx_urts.h"     
 #include "utility.h"
+#include <openssl/rsa.h>     // For RSA functions
+#include <openssl/pem.h> 
+#include <iostream>
 
 #ifndef MAX_PATH
 #define MAX_PATH 260
@@ -163,6 +166,22 @@ sgx_status_t  SGXAPI sgx_ecall(const sgx_enclave_id_t eid,
 #endif
 
 }
+
+RSA* load_public_key_from_memory(const char* key_pem) {
+    BIO* bio = BIO_new_mem_buf(key_pem, -1);
+    if (!bio) {
+        std::cerr << "Error creating BIO buffer." << std::endl;
+        return nullptr;
+    }
+    RSA* rsa_public_key = PEM_read_bio_RSA_PUBKEY(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!rsa_public_key) {
+        std::cerr << "Error loading public key from memory." << std::endl;
+        return nullptr;
+    }
+    return rsa_public_key;
+}
+
 
 
 #ifdef _MSC_VER
