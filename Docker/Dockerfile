@@ -22,6 +22,7 @@ RUN ls external/toolset/
 USER root
 RUN cp external/toolset/ubuntu20.04/* /usr/local/bin
 USER raoul
+
 RUN make sdk
 RUN make sdk_install_pkg
 RUN ls linux/installer/bin
@@ -56,8 +57,42 @@ USER raoul
 WORKDIR ../../tools/SGXPlatformRegistration
 RUN source /home/raoul/linux-sgx/sgxsdk/environment && make
 RUN source /home/raoul/linux-sgx/sgxsdk/environment && make deb_pkg
+USER root
+RUN bash -c 'rm -rf /run/systemd'
 
 # installed to:
 # ~/linux-sgx/SGXDataCenterAttestationPrimitives/tools/SGXPlatformRegistration/build/installer/
+
+# Install SGX runtime libraries
+USER root
+RUN apt-get install sudo
+RUN echo 'deb [signed-by=/etc/apt/keyrings/intel-sgx-keyring.asc arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | sudo tee /etc/apt/sources.list.d/intel-sgx.list
+RUN wget https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key
+RUN mkdir /etc/apt/keyrings
+RUN cat intel-sgx-deb.key | sudo tee /etc/apt/keyrings/intel-sgx-keyring.asc > /dev/null
+RUN apt-get update
+RUN apt-get upgrade -y
+RUN apt-get update
+RUN apt-get install -y libsgx-urts libsgx-epid libsgx-quote-ex libsgx-dcap-ql
+
+# Setup aesmd service in container
+USER root
+RUN bash -c 'mkdir /var/run/aesmd'
+RUN bash -c 'chown -c raoul /var/run/aesmd'
+
+# Preparing to run PCKIDRetrievalTool
+USER root
+RUN bash -c 'apt-get install -y screen'
+USER raoul
+WORKDIR ../PCKRetrievalTool/
+RUN bash -c 'ln -s /usr/lib/x86_64-linux-gnu/libsgx_id_enclave.signed.so.1'
+
+# Running PCKRetrievalTool:
+# Build and run docker container (Warning: The /dev/isgx is probably incorrect!)
+# docker build --tag sgx_dcap_tools . && docker run --device /dev/isgx --privileged -ti sgx_dcap_tools
+
+# Run aesm service in background
+# LD_LIBRARY_PATH=/opt/intel/sgx-aesm-service/aesm/ /opt/intel/sgx-aesm-service/aesm/aesm_service --no-daemon --no-syslog &
+# ./PCKIDRetrievalTool
 
 ENTRYPOINT bash
