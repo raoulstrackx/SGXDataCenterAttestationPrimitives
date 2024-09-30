@@ -86,13 +86,15 @@ RUN bash -c 'apt-get install -y screen'
 USER raoul
 WORKDIR ../PCKRetrievalTool/
 RUN bash -c 'ln -s /usr/lib/x86_64-linux-gnu/libsgx_id_enclave.signed.so.1'
+RUN bash -c 'ln -s /usr/lib/x86_64-linux-gnu/libsgx_pce.signed.so.1'
 
 # Running PCKRetrievalTool:
-# Build and run docker container (Warning: The /dev/isgx is probably incorrect!)
-# docker build --tag sgx_dcap_tools . && docker run --device /dev/isgx --privileged -ti sgx_dcap_tools
+# Build and run docker container (devices for the 5.15.0-1073-azure kernel)
+# docker build --tag sgx_dcap_tools . && docker run --device /dev/sgx_enclave --device /dev/sgx_provision --device /dev/sgx/enclave --device /dev/sgx/provision --privileged -ti sgx_dcap_tools
 
-# Run aesm service in background
-# LD_LIBRARY_PATH=/opt/intel/sgx-aesm-service/aesm/ /opt/intel/sgx-aesm-service/aesm/aesm_service --no-daemon --no-syslog &
+# In the container: Run aesm service in background
+# sudo chown raoul /dev/sgx*
+# LD_LIBRARY_PATH=/opt/intel/sgx-aesm-service/aesm/ /opt/intel/sgx-aesm-service/aesm/aesm_service --no-daemon --no-syslog --supported_attestation_types=ECDSA &
 # ./PCKIDRetrievalTool
 
 ENTRYPOINT bash
