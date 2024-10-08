@@ -102,12 +102,14 @@ App_Cpp_Files := $(wildcard App/linux/*.cpp App/*.cpp)
 App_Include_Paths := -I$(SGX_SDK)/include -I ./App/inc
 App_Include_Paths += -I ../../QuoteGeneration/common/inc/internal 
 App_Include_Paths += -I ../../QuoteGeneration/ae/inc/internal -I ../SGXPlatformRegistration/include
-
+App_Include_Paths += -I ../../prebuilt/openssl/inc/openssl
 App_C_Flags := $(COMMON_FLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
 App_Cpp_Flags := $(App_C_Flags) -std=c++11
 App_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,-z,relro,-z,now,-z,noexecstack
-App_Link_Flags +=  -lcurl -ldl -lpthread
+App_Link_Flags +=  -lcurl -ldl
+App_Link_Flags += -L ../../prebuilt/openssl/lib/linux64 -lcrypto
+App_Link_Flags +=   -lpthread
 ifeq ($(STANDALONE), 1)
 	App_Link_Flags += -Wl,-rpath=.
 endif
