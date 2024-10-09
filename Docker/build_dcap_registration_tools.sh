@@ -3,6 +3,7 @@ repo_root=$(readlink -f $(dirname "${BASH_SOURCE[0]}")/../)
 cd ${repo_root}
 
 name=$(mktemp -u XXXXX)
+echo "Building ${name}"
 pushd Docker
 rm -rf tools
 docker build --tag sgx_dcap_tools .
