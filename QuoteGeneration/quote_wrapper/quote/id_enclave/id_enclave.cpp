@@ -237,10 +237,12 @@ sgx_status_t ide_get_pce_encrypt_key(
         return(SGX_ERROR_INVALID_PARAMETER);
     }
 
+    // Raoul: (2) You should be able to remove these memcpy's. That will modify the enclave measurement, but that doesn't seem to matter. It can even be a debug enclave, but this code needs to run inside of an enclave because you need to be able to create the sgx report for the PCE enclave. That requires an instruction that only works inside of an enclave.
     p_rsa_pub_key = (pce_rsaoaep_3072_encrypt_pub_key_t*)p_public_key;
     memcpy(p_rsa_pub_key->e, g_ref_pubkey_e_be, sizeof(p_rsa_pub_key->e));
     memcpy(p_rsa_pub_key->n, g_ref_pubkey_n_be, sizeof(p_rsa_pub_key->n));
 
+    // Raoul: (3) You'll need something like this. The PCE enclave requires that you pass in a report specifically designed for it. sgx reports can be used to sign something for a particular enclave. It's the key part of local attestation, and a way to set up a secure channel between two enclaves on the same platform. For us it wouldn't be required, but we have no choice since we can't modify the PCE enclave.
     // report_data = SHA256(crypto_suite||rsa_pub_key)||0-padding
     do {
         sgx_status = sgx_sha256_init(&sha_handle);
@@ -272,6 +274,7 @@ sgx_status_t ide_get_pce_encrypt_key(
         goto ret_point;
     }
 
+    // Raoul: (4) Creating the report is required, and needs to happen inside _a_ enclave
     sgx_status = sgx_create_report(p_pce_target_info, &report_data, p_ide_report);
     if (SGX_SUCCESS != sgx_status && SGX_ERROR_OUT_OF_MEMORY != sgx_status) {
         sgx_status = SGX_ERROR_UNEXPECTED;

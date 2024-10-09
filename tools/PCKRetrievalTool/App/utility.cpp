@@ -535,6 +535,7 @@ int collect_data(uint8_t **pp_data_buffer)
         goto CLEANUP;
     }
 
+    // Raoul: (1) This call is required to create an SGX report for the PCE enclave. This needs to happen in an enclave, but any enclave would do (maybe even a debug enclave). The cleanest way is to write a new app from scratch to extract the plaintext ppid. For now, you can just modify the id_enclave code itself.
     sgx_status = ide_get_pce_encrypt_key(id_enclave_eid,
                                          &ecall_ret,
                                          &pce_target_info,
