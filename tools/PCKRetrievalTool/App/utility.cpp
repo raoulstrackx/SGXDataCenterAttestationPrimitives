@@ -591,6 +591,25 @@ void print_decrypted_ppid(unsigned char decrypted_ppid[], size_t length) {
     printf("\n");
 }
 
+RSA* generate_identity_rsa_key() {
+    RSA* rsa = RSA_new();
+    BIGNUM* n = BN_new();
+    BIGNUM* e = BN_new();
+    BIGNUM* d = BN_new();
+
+
+    BN_set_word(n, 17);
+
+    // Set both public and private exponents to 1
+    BN_set_word(e, 1);
+    BN_set_word(d, 1);
+
+    // Set RSA key components
+    RSA_set0_key(rsa, n, e, d);
+
+    return rsa;
+}
+
 // generate ecdsa quote
 // return value:
 //  0: successfully generate the ecdsa quote
@@ -753,7 +772,7 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
     sgx_report_t id_enclave_report;
     uint32_t enc_key_size = REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE;
     uint8_t enc_public_key[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
-uint8_t public_key_binary[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
+    uint8_t public_key_binary[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
     uint8_t encrypted_ppid[REF_RSA_OAEP_3072_MOD_SIZE];
     uint32_t encrypted_ppid_ret_size;
     pce_info_t pce_info;
@@ -765,7 +784,7 @@ uint8_t public_key_binary[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZ
     unsigned char decrypted_ppid[ENCRYPTED_PPID_LENGTH];
     int decrypted_size = -1;
     bool load_flag = false;
-
+    RSA* identity_rsa_key = generate_identity_rsa_key();
     RSA* rsa_private_key = load_private_key_from_memory(private_key_pem);
     if (!rsa_private_key) {
         fprintf(stderr, "Failed to load RSA private key.\n");
@@ -774,7 +793,7 @@ uint8_t public_key_binary[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZ
     }
 
     // populate public key array for `get_pc_info`
-    if (!load_and_populate_key(public_key_pem, public_key_binary)) {
+    if (!populate_public_key(identity_rsa_key, public_key_binary)) {
         fprintf(stderr, "Failed to load RSA public key.\n");
         ret = -1;
         goto CLEANUP;
@@ -834,7 +853,7 @@ uint8_t public_key_binary[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZ
                                          PCE_ALG_RSA_OAEP_3072,
                                          PPID_RSA3072_ENCRYPTED,
                                          enc_key_size,
-                                         enc_public_key);
+                                         public_key_binary);
     if (SGX_SUCCESS != sgx_status) {
         fprintf(stderr, "Failed to call into the ID_ENCLAVE: get_report_and_pce_encrypt_key. The error code is: 0x%04x.\n", sgx_status);
         ret = -1;
