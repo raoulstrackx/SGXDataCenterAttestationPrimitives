@@ -39,12 +39,14 @@
 #ifdef _MSC_VER
 #include <Windows.h>
 #include <tchar.h>
+#include "sgx_dcap_ql_wrapper.h"
+#include "Enclave_u.h"
 #else
 #include <dlfcn.h>
 #include <unistd.h>
-#endif
 #include "id_enclave_u.h"
 #include "pce_u.h"
+#endif
 #include "sgx_urts.h"     
 #include "utility.h"
 #include <openssl/rsa.h>     // For RSA functions
@@ -56,8 +58,6 @@
 #ifndef MAX_PATH
 #define MAX_PATH 260
 #endif
-// Use secure HTTPS certificate or not
-extern bool g_use_secure_cert ;
 
 
 #ifdef DEBUG
@@ -69,9 +69,10 @@ extern bool g_use_secure_cert ;
 #endif
 
 #ifdef  _MSC_VER                
-#define PCE_ENCLAVE_NAME  _T("pce.signed.dll")
-#define ID_ENCLAVE_NAME   _T("id_enclave.signed.dll")
+#define TOOL_ENCLAVE_NAME _T("pck_id_retrieval_tool_enclave.signed.dll")
 #define SGX_URTS_LIBRARY _T("sgx_urts.dll")
+#define SGX_DCAP_QUOTE_GENERATION_LIBRARY _T("sgx_dcap_ql.dll")
+#define SGX_QL_QUOTE_CONFIG_LIB_FILE_NAME _T("dcap_quoteprov.dll")
 #define SGX_MULTI_PACKAGE_AGENT_UEFI_LIBRARY _T("mp_uefi.dll")
 #define FINDFUNCTIONSYM   GetProcAddress
 #define CLOSELIBRARYHANDLE  FreeLibrary
@@ -87,7 +88,7 @@ typedef sgx_status_t (SGXAPI *sgx_create_enclave_func_t)(const LPCSTR file_name,
 #else
 #define PCE_ENCLAVE_NAME  "libsgx_pce.signed.so.1"
 #define ID_ENCLAVE_NAME   "libsgx_id_enclave.signed.so.1"
-#define SGX_URTS_LIBRARY "libsgx_urts.so"             
+#define SGX_URTS_LIBRARY "libsgx_urts.so.1"             
 #define SGX_MULTI_PACKAGE_AGENT_UEFI_LIBRARY "libmpa_uefi.so.1"
 #define FINDFUNCTIONSYM   dlsym
 #define CLOSELIBRARYHANDLE  dlclose
@@ -115,6 +116,10 @@ typedef sgx_status_t (SGXAPI* sgx_get_target_info_func_t)(const sgx_enclave_id_t
 #ifdef _MSC_VER
 #pragma warning(disable: 4201)    // used to eliminate `unused variable' warning
 #define UNUSED(val) (void)(val)
+
+typedef quote3_error_t (*sgx_qe_get_target_info_func_t)(sgx_target_info_t* p_qe_target_info);
+typedef quote3_error_t (*sgx_qe_get_quote_size_func_t)(uint32_t* p_quote_size);
+typedef quote3_error_t (*sgx_qe_get_quote_func_t)(const sgx_report_t* p_app_report,uint32_t quote_size, uint8_t* p_quote);
 
 #endif 
 #include "MPUefi.h"
@@ -240,7 +245,7 @@ bool load_enclave(const char* enclave_name, sgx_enclave_id_t* p_eid)
     char enclave_path[MAX_PATH] = "";
 #endif
 
-    if (!get_program_path(enclave_path, MAX_PATH - 1))
+    if (!get_program_path(enclave_path, MAX_PATH))
         return false;
 #if defined(_MSC_VER)    
     if (_tcsnlen(enclave_path, MAX_PATH) + _tcsnlen(enclave_name, MAX_PATH) + sizeof(char) > MAX_PATH)
@@ -291,6 +296,50 @@ void unload_enclave(sgx_enclave_id_t* p_eid)
 }
 
 
+#if defined(_MSC_VER)
+bool create_app_enclave_report(sgx_target_info_t& qe_target_info, sgx_report_t *app_report)
+{
+    bool ret = true;
+    uint32_t retval = 0;
+    sgx_status_t sgx_status = SGX_SUCCESS;
+    sgx_enclave_id_t eid = 0;
+
+    // try to sgx_urts library to create enclave.
+    sgx_urts_handle = LoadLibrary(SGX_URTS_LIBRARY);
+    if (sgx_urts_handle == NULL) {
+        printf("ERROR: didn't find the sgx_urts.dll library, please make sure you have installed PSW installer package. \n");
+        return false;
+    }
+
+    ret = load_enclave(TOOL_ENCLAVE_NAME, &eid);
+    if (ret == false) {
+        goto CLEANUP;
+    }
+
+    // Get the app enclave report targeting the QE3
+    sgx_status = enclave_create_report(eid,
+        &retval,
+        &qe_target_info,
+        app_report);
+    if ((SGX_SUCCESS != sgx_status) || (0 != retval)) {
+        printf("\nCall to get_app_enclave_report() failed\n");
+        ret = false;
+        goto CLEANUP;
+    }
+
+CLEANUP:
+    if (eid != 0) {
+        unload_enclave(&eid);
+    }
+
+    if(sgx_urts_handle) {
+        CLOSELIBRARYHANDLE(sgx_urts_handle);
+    }
+    return ret;
+}
+
+#endif
+
 // for multi-package platform, get the platform manifet
 // return value:
 //  UEFI_OPERATION_SUCCESS: successfully get the platform manifest.
@@ -336,7 +385,7 @@ uefi_status_t get_platform_manifest(uint8_t ** buffer, uint16_t &out_buffer_size
         p_mp_uefi_get_request == NULL ||
         p_mp_uefi_get_registration_status == NULL ||
         p_mp_uefi_terminate == NULL) {
-        printf("Error: couldn't find uefi function interface(s) in the UEFI shared library.\n");
+        printf("Error: cound't find uefi function interface(s) in the UEFI shared library.\n");
         CLOSELIBRARYHANDLE(uefi_lib_handle);
         return ret;
     }
@@ -346,7 +395,6 @@ uefi_status_t get_platform_manifest(uint8_t ** buffer, uint16_t &out_buffer_size
     mpResult = p_mp_uefi_init(EFIVARS_FILE_SYSTEM_IN_OS, MP_REG_LOG_LEVEL_NONE);
     if (mpResult != MP_SUCCESS) {
         printf("Error: couldn't init UEFI shared library.\n");
-        CLOSELIBRARYHANDLE(uefi_lib_handle);
         return ret;
     }
     do {
@@ -374,8 +422,8 @@ uefi_status_t get_platform_manifest(uint8_t ** buffer, uint16_t &out_buffer_size
         else {
             MpRegistrationStatus status;
             MpResult mpResult_registration_status = p_mp_uefi_get_registration_status(&status);
-            if (mpResult_registration_status != MP_SUCCESS) {
-                printf("Warning: error occurred while getting registration status, the error code is: %d \n", mpResult_registration_status);
+            if (mpResult != MP_SUCCESS) {
+                printf("Warning: error happens when get registration status, the error code is: %d \n", mpResult_registration_status);
                 break;
             }
             if(status.registrationStatus == MP_TASK_COMPLETED){
@@ -434,7 +482,7 @@ uefi_status_t set_registration_status()
     if (p_mp_uefi_init == NULL ||
         p_mp_uefi_set_registration_status == NULL ||
         p_mp_uefi_terminate == NULL) {
-        printf("Error: couldn't find uefi function interface(s) in the multi-package agent shared library.\n");
+        printf("Error: cound't find uefi function interface(s) in the multi-package agent shared library.\n");
         CLOSELIBRARYHANDLE(uefi_lib_handle);
         return ret;
     }
@@ -451,11 +499,8 @@ uefi_status_t set_registration_status()
     status.registrationStatus = MP_TASK_COMPLETED;
     status.errorCode = MPA_SUCCESS;
     mpResult = p_mp_uefi_set_registration_status(&status);
-    if (mpResult == MP_INSUFFICIENT_PRIVILEGES) {
-        printf("Warning: the UEFI variable was in read-only mode, could NOT write it. \n");
-    }
-    else if (mpResult != MP_SUCCESS) {
-        printf("Warning: error occurred while setting registration status, the error code is: %d \n", mpResult);
+    if (mpResult != MP_SUCCESS) {
+        printf("Warning: error happens when set registration status, the error code is: %d \n", mpResult);
     }
     else {
         ret = UEFI_OPERATION_SUCCESS;
@@ -503,6 +548,7 @@ RSA* load_private_key_from_memory(const char* key_pem) {
     return rsa_private_key;
 }
 
+
 bool populate_public_key(RSA* rsa_public_key, uint8_t* enc_public_key) {
     const BIGNUM* n = RSA_get0_n(rsa_public_key);
     const BIGNUM* e = RSA_get0_e(rsa_public_key);
@@ -524,6 +570,7 @@ bool populate_public_key(RSA* rsa_public_key, uint8_t* enc_public_key) {
     return true;
 }
 
+
 // Utility function to handle key loading and population
 bool load_and_populate_key(const char* public_key_pem, uint8_t* enc_public_key) {
     RSA* rsa_public_key = load_public_key_from_memory(public_key_pem);
@@ -544,25 +591,98 @@ void print_decrypted_ppid(unsigned char decrypted_ppid[], size_t length) {
     printf("\n");
 }
 
-RSA* generate_identity_rsa_key() {
-    RSA* rsa = RSA_new();
-    BIGNUM* n = BN_new();
-    BIGNUM* e = BN_new();
-    BIGNUM* d = BN_new();
+// generate ecdsa quote
+// return value:
+//  0: successfully generate the ecdsa quote
+// -1: error happens.
 
- 
-    BN_set_word(n, 17);
+#ifdef _MSC_VER
+int generate_quote(uint8_t **quote_buffer, uint32_t& quote_size)
+{
+    int ret = -1;
+    quote3_error_t qe3_ret = SGX_QL_SUCCESS;
+    sgx_target_info_t qe_target_info;
+    sgx_report_t app_report;
+
+    // try to load quote provide library.
+    HINSTANCE quote_provider_library_handle = LoadLibrary(SGX_QL_QUOTE_CONFIG_LIB_FILE_NAME);
+    if (quote_provider_library_handle != NULL) {
+        PRINT_MESSAGE("Found the Quote provider library. \n");
+    }
+    else {
+        printf("Warning: didn't find the quote provider library. \n");
+    }  
     
-    // Set both public and private exponents to 1
-    BN_set_word(e, 1);
-    BN_set_word(d, 1);
+    // try to sgx dcap quote generation library to generate quote.
+    HINSTANCE sgx_dcap_ql_handle = LoadLibrary(SGX_DCAP_QUOTE_GENERATION_LIBRARY);
+    if (sgx_dcap_ql_handle == NULL) {
+        printf("ERROR: didn't find the sgx_dcap_ql.dll library, please make sure you have installed DCAP INF installer package. \n");
+        CLOSELIBRARYHANDLE(quote_provider_library_handle);
+        return ret;
+    }
+    
+    sgx_qe_get_target_info_func_t p_sgx_qe_get_target_info = (sgx_qe_get_target_info_func_t)FINDFUNCTIONSYM(sgx_dcap_ql_handle, "sgx_qe_get_target_info");
+    sgx_qe_get_quote_size_func_t p_sgx_qe_get_quote_size = (sgx_qe_get_quote_size_func_t)FINDFUNCTIONSYM(sgx_dcap_ql_handle, "sgx_qe_get_quote_size");
+    sgx_qe_get_quote_func_t p_sgx_qe_get_quote = (sgx_qe_get_quote_func_t)FINDFUNCTIONSYM(sgx_dcap_ql_handle, "sgx_qe_get_quote");
+    if (p_sgx_qe_get_target_info == NULL || p_sgx_qe_get_quote_size == NULL || p_sgx_qe_get_quote == NULL) {
+        printf("ERROR: Can't find the quote generation functions in sgx dcap quote generation shared library.\n");
+        if (quote_provider_library_handle != NULL) {
+            CLOSELIBRARYHANDLE(quote_provider_library_handle);
+        }
+        if (sgx_dcap_ql_handle != NULL) {
+            CLOSELIBRARYHANDLE(sgx_dcap_ql_handle);
+        }
+        return ret;
+    }
+    do {
+        PRINT_MESSAGE("\nStep1: Call sgx_qe_get_target_info:");
+        qe3_ret = p_sgx_qe_get_target_info(&qe_target_info);
+        if (SGX_QL_SUCCESS != qe3_ret) {
+            printf("Error in sgx_qe_get_target_info. 0x%04x\n", qe3_ret);
+            break;
+        }
 
-    // Set RSA key components
-    RSA_set0_key(rsa, n, e, d);
+        PRINT_MESSAGE("succeed! \nStep2: Call create_app_report:");
+        if (true != create_app_enclave_report(qe_target_info, &app_report)) {
+            printf("\nCall to create_app_report() failed\n");
+            break;
+        }
 
-    return rsa;
+        PRINT_MESSAGE("succeed! \nStep3: Call sgx_qe_get_quote_size:");
+        qe3_ret = p_sgx_qe_get_quote_size(&quote_size);
+        if (SGX_QL_SUCCESS != qe3_ret) {
+            printf("Error in sgx_qe_get_quote_size. 0x%04x\n", qe3_ret);
+            break;
+        }
+
+        PRINT_MESSAGE("succeed!");
+        *quote_buffer = (uint8_t*)malloc(quote_size);
+        if (NULL == *quote_buffer) {
+            printf("Couldn't allocate quote_buffer\n");
+            break;
+        }
+        memset(*quote_buffer, 0, quote_size);
+
+        // Get the Quote
+        PRINT_MESSAGE("\nStep4: Call sgx_qe_get_quote:");
+        qe3_ret = p_sgx_qe_get_quote(&app_report, quote_size, *quote_buffer);
+        if (SGX_QL_SUCCESS != qe3_ret) {
+            printf("Error in sgx_qe_get_quote. 0x%04x\n", qe3_ret);
+            break;
+        }
+        PRINT_MESSAGE("succeed!\n");
+        ret = 0;
+    } while (0);
+
+    if (quote_provider_library_handle != NULL) {
+        CLOSELIBRARYHANDLE(quote_provider_library_handle);
+    }
+    if (sgx_dcap_ql_handle != NULL) {
+        CLOSELIBRARYHANDLE(sgx_dcap_ql_handle);
+    }
+    return ret;
 }
-
+#else
 int collect_data(uint8_t **pp_data_buffer)
 {
     const char* private_key_pem = R"(-----BEGIN PRIVATE KEY-----
@@ -607,7 +727,7 @@ nvld+W+urv1bTEzbASAq5lwE
 -----END PRIVATE KEY-----
     )";
 
- const char* public_key_pem = R"(-----BEGIN PUBLIC KEY-----
+    const char* public_key_pem = R"(-----BEGIN PUBLIC KEY-----
 MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAts/jU3KtghO8rKdwPGrd
 BW4S0YgcrcrWLRF4+pARxyQFGR5+M77Woxb1xzhfACA4wNhpV7maa8nRmNACahP5
 akNXRwevkfC+VN0Be6hVzHa0FvmTrCoi94cR1Y5ZfY0RRa5MY3Hu7w5iHfnMb3U5
@@ -633,18 +753,19 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
     sgx_report_t id_enclave_report;
     uint32_t enc_key_size = REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE;
     uint8_t enc_public_key[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
-    uint8_t encrypted_ppid[REF_RSA_OAEP_3072_MOD_SIZE];
 uint8_t public_key_binary[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
+    uint8_t encrypted_ppid[REF_RSA_OAEP_3072_MOD_SIZE];
     uint32_t encrypted_ppid_ret_size;
     pce_info_t pce_info;
     uint8_t signature_scheme;
     sgx_target_info_t pce_target_info;
 
     sgx_get_target_info_func_t p_sgx_get_target_info = NULL;
-unsigned char decrypted_ppid[ENCRYPTED_PPID_LENGTH];
+
+    unsigned char decrypted_ppid[ENCRYPTED_PPID_LENGTH];
     int decrypted_size = -1;
     bool load_flag = false;
-RSA* identity_rsa_key = generate_identity_rsa_key();
+
     RSA* rsa_private_key = load_private_key_from_memory(private_key_pem);
     if (!rsa_private_key) {
         fprintf(stderr, "Failed to load RSA private key.\n");
@@ -653,11 +774,12 @@ RSA* identity_rsa_key = generate_identity_rsa_key();
     }
 
     // populate public key array for `get_pc_info`
-    if (!populate_public_key(identity_rsa_key, public_key_binary)) {
+    if (!load_and_populate_key(public_key_pem, public_key_binary)) {
         fprintf(stderr, "Failed to load RSA public key.\n");
         ret = -1;
         goto CLEANUP;
     }
+
 
     load_flag = get_urts_library_handle();
     if(false == load_flag) {// can't find urts shared library to load enclave
@@ -712,7 +834,7 @@ RSA* identity_rsa_key = generate_identity_rsa_key();
                                          PCE_ALG_RSA_OAEP_3072,
                                          PPID_RSA3072_ENCRYPTED,
                                          enc_key_size,
-                                         public_key_binary);
+                                         enc_public_key);
     if (SGX_SUCCESS != sgx_status) {
         fprintf(stderr, "Failed to call into the ID_ENCLAVE: get_report_and_pce_encrypt_key. The error code is: 0x%04x.\n", sgx_status);
         ret = -1;
@@ -754,12 +876,12 @@ RSA* identity_rsa_key = generate_identity_rsa_key();
     }
 
     if (encrypted_ppid_ret_size != ENCRYPTED_PPID_LENGTH) {
-        fprintf(stderr, "PCE returned incorrect encrypted PPID size.\n");
+        fprintf(stderr, "PCE returned unexpected returned encrypted PPID size.\n");
         ret = -1;
         goto CLEANUP;
     }
 
-// Decrypt the data using the RSA private key
+    // Decrypt the data using the RSA private key
 
     decrypted_size = RSA_private_decrypt(REF_RSA_OAEP_3072_MOD_SIZE,
                                              encrypted_ppid,
@@ -768,9 +890,9 @@ RSA* identity_rsa_key = generate_identity_rsa_key();
                                              RSA_PKCS1_OAEP_PADDING);
 
     if (decrypted_size == -1) {
-//        fprintf(stderr, "Failed to decrypt using RSA private key.\n");
-//        ret = -1;
-//        goto CLEANUP;
+        fprintf(stderr, "Failed to decrypt using RSA private key.\n");
+        ret = -1;
+        goto CLEANUP;
     }
 
     print_decrypted_ppid(decrypted_ppid, ENCRYPTED_PPID_LENGTH);
@@ -818,6 +940,7 @@ CLEANUP:
     return ret;
 
 }
+#endif
 
 bool is_valid_proxy_type(std::string& proxy_type) {
     if (proxy_type.compare("DEFAULT") == 0 ||
@@ -832,165 +955,11 @@ bool is_valid_proxy_type(std::string& proxy_type) {
 }
 
 bool is_valid_use_secure_cert(std::string& use_secure_cert) {
-    if (use_secure_cert.compare("TRUE") == 0 ) {
+    if (use_secure_cert.compare("TRUE") == 0 ||
+        use_secure_cert.compare("FALSE") == 0 ) {
         return true;
-    }
-    else if(use_secure_cert.compare("FALSE") == 0) {
-        g_use_secure_cert = false;
-	return true;
     }
     else {
         return false;
     }  
-}
-
-bool is_valid_tcb_update_type(std::string& tcb_update_type) {
-    if (tcb_update_type.compare("STANDARD") == 0 ||
-        tcb_update_type.compare("EARLY")  == 0 ||
-        tcb_update_type.compare("ALL")  == 0 ) { 
-        return true;
-    }
-    else {
-        return false;
-    }                
-}
-
-
-/**
-* Method converts byte containing value from 0x00-0x0F into its corresponding ASCII code,
-* e.g. converts 0x00 to '0', 0x0A to 'A'.
-* Note: This is mainly a helper method for internal use in byte_array_to_hex_string().
-*
-* @param in byte to be converted (allowed values: 0x00-0x0F)
-*
-* @return ASCII code representation of the byte or 0 if method failed (e.g input value was not in provided range).
-*/
-uint8_t convert_value_to_ascii(uint8_t in)
-{
-	if (in <= 0x09)
-	{
-		return (uint8_t)(in + '0');
-	}
-	else if (in <= 0x0F)
-	{
-		return (uint8_t)(in - 10 + 'A');
-	}
-
-	return 0;
-}
-
-//Function to do HEX encoding of array of bytes
-//@param in_buf, bytes array whose length is in_size
-//       out_buf, output the HEX encoding of in_buf on success.
-//@return true on success and false on error
-//The out_size must always be 2*in_size since each byte into encoded by 2 characters
-bool byte_array_to_hex_string(const uint8_t *in_buf, uint32_t in_size, uint8_t *out_buf, uint32_t out_size)
-{
-	if (in_size>UINT32_MAX / 2)return false;
-	if (in_buf == NULL || out_buf == NULL || out_size != in_size * 2)return false;
-
-	for (uint32_t i = 0; i< in_size; i++)
-	{
-		*out_buf++ = convert_value_to_ascii(static_cast<uint8_t>(*in_buf >> 4));
-		*out_buf++ = convert_value_to_ascii(static_cast<uint8_t>(*in_buf & 0xf));
-		in_buf++;
-	}
-	return true;
-}
-                     
-
-/**
-* This function appends request parameters of byte array type to the UR in HEX string format
-*
-* @param url Request UR
-* @param request  Request parameter in byte array
-* @param request_size Size of byte array
-*
-* @return true If the byte array was appended to the UR successfully
-*/
-network_post_error_t append_body_context(string& url, const uint8_t* request, const uint32_t request_size)
-{
-	if (request_size >= UINT32_MAX / 2)
-		return POST_INVALID_PARAMETER_ERROR;
-
-	uint8_t* hex = (uint8_t*)malloc(request_size * 2);
-	if (!hex)
-		return POST_OUT_OF_MEMORY_ERROR;
-	if (!byte_array_to_hex_string(request, request_size, hex, request_size * 2)) {
-		free(hex);
-		return POST_UNEXPECTED_ERROR;
-	}
-	url.append(reinterpret_cast<const char*>(hex), request_size * 2);
-	free(hex);
-	return POST_SUCCESS;
-}
-
-network_post_error_t generate_json_message_body(const uint8_t *raw_data, 
-                                                const uint32_t raw_data_size,
-                                                const uint16_t platform_id_length,
-                                                const bool non_enclave_mode, 
-                                                string &jsonString)
-{
-    network_post_error_t ret = POST_SUCCESS;
-    const uint8_t *position = raw_data;
-
-    jsonString = "{";
-    if (true == non_enclave_mode) {
-        jsonString += "\"pce_id\": \"";
-        if ((ret = append_body_context(jsonString, position, PCE_ID_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-        jsonString += "\" ,\"qe_id\": \"";
-        position = position + PCE_ID_LENGTH;
-        if ((ret = append_body_context(jsonString, position, platform_id_length)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"platform_manifest\": \"";
-        position = position + platform_id_length;
-        if ((ret = append_body_context(jsonString, position, raw_data_size - PCE_ID_LENGTH - platform_id_length)) != POST_SUCCESS) {
-            return ret;
-        }
-    }
-    else {
-        uint32_t left_size = raw_data_size - platform_id_length - CPU_SVN_LENGTH - ISV_SVN_LENGTH - PCE_ID_LENGTH - ENCRYPTED_PPID_LENGTH;
-        jsonString += "\"enc_ppid\": \"";
-        if ((ret = append_body_context(jsonString, position, ENCRYPTED_PPID_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"pce_id\": \"";
-        position = position + ENCRYPTED_PPID_LENGTH;
-        if ((ret = append_body_context(jsonString, position, PCE_ID_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-        jsonString += "\" ,\"cpu_svn\": \"";
-        position = position + PCE_ID_LENGTH;
-        if ((ret = append_body_context(jsonString, position, CPU_SVN_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"pce_svn\": \"";
-        position = position + CPU_SVN_LENGTH;
-        if ((ret = append_body_context(jsonString, position, ISV_SVN_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"qe_id\": \"";
-        position = position + ISV_SVN_LENGTH;
-        if ((ret = append_body_context(jsonString, position, platform_id_length)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"platform_manifest\": \"";
-        if (left_size != 0) {
-            position = position + platform_id_length;
-            if ((ret = append_body_context(jsonString, position, left_size)) != POST_SUCCESS) {
-                return ret;
-            }
-        }
-
-    }
-    jsonString += "\" }";
-    return ret;
 }
