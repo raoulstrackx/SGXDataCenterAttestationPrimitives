@@ -553,6 +553,11 @@ bool populate_public_key(RSA* rsa_public_key, uint8_t* enc_public_key) {
     const BIGNUM* n = RSA_get0_n(rsa_public_key);
     const BIGNUM* e = RSA_get0_e(rsa_public_key);
 
+    if (!n || !e) {
+        fprintf(stderr, "Error retrieving RSA public key components.");
+        return false;
+    }
+
     // Convert modulus to bytes
     int n_bytes = BN_bn2bin(n, enc_public_key);
     if (n_bytes < 0 || n_bytes > REF_RSA_OAEP_3072_MOD_SIZE) {
@@ -598,7 +603,7 @@ RSA* generate_identity_rsa_key() {
     BIGNUM* d = BN_new();
 
 
-    BN_set_word(n, 17);
+    BN_set_word(n, 2^2048);
 
     // Set both public and private exponents to 1
     BN_set_word(e, 1);
@@ -785,12 +790,6 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
     int decrypted_size = -1;
     bool load_flag = false;
     RSA* identity_rsa_key = generate_identity_rsa_key();
-    RSA* rsa_private_key = load_private_key_from_memory(private_key_pem);
-    if (!rsa_private_key) {
-        fprintf(stderr, "Failed to load RSA private key.\n");
-        ret = -1;
-        goto CLEANUP;
-    }
 
     // populate public key array for `get_pc_info`
     if (!populate_public_key(identity_rsa_key, public_key_binary)) {
@@ -905,7 +904,7 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
     decrypted_size = RSA_private_decrypt(REF_RSA_OAEP_3072_MOD_SIZE,
                                              encrypted_ppid,
                                              decrypted_ppid,
-                                             rsa_private_key,
+                                             identity_rsa_key,
                                              RSA_PKCS1_OAEP_PADDING);
 
     if (decrypted_size == -1) {
@@ -916,7 +915,7 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
 
     print_decrypted_ppid(decrypted_ppid, ENCRYPTED_PPID_LENGTH);
 
-    RSA_free(rsa_private_key);
+    RSA_free(identity_rsa_key);
 
     buffer_size = ENCRYPTED_PPID_LENGTH + CPU_SVN_LENGTH + ISV_SVN_LENGTH + PCE_ID_LENGTH + DEFAULT_PLATFORM_ID_LENGTH;
     *pp_data_buffer = (uint8_t *) malloc(buffer_size);
