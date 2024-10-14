@@ -1325,7 +1325,7 @@ uint32_t gen_quote(uint8_t *p_blob,
 
     ref_static_assert(sizeof(tee_info_t) == sizeof(p_td_report->tee_info));
     p_tee_info = (tee_info_t*)p_td_report->tee_info;
-    for (int i = 0; i < TD_INFO_RESERVED_BYTES; i++) {
+    for (int i = 0; i < 112; i++) {
         if (p_tee_info->reserved[i]) {
             return(TDQE_REPORT_FORMAT_NOT_SUPPORTED);
         }
