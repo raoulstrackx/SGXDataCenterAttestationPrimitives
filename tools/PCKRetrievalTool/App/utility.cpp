@@ -545,9 +545,8 @@ int collect_data(uint8_t **pp_data_buffer)
 
     sgx_get_target_info_func_t p_sgx_get_target_info = NULL;
     uint8_t decrypted_ppid[16];
-    bool load_flag = false;
 
-    load_flag = get_urts_library_handle();
+    bool load_flag = get_urts_library_handle();
     if(false == load_flag) {// can't find urts shared library to load enclave
         ret = -1;
         goto CLEANUP;
@@ -593,7 +592,7 @@ int collect_data(uint8_t **pp_data_buffer)
         goto CLEANUP;
     }
 
-    sgx_status = ide_get_ppid_encrypt_key(id_enclave_eid,
+    sgx_status = ide_get_pce_encrypt_key(id_enclave_eid,
                                          &ecall_ret,
                                          &pce_target_info,
                                          &id_enclave_report,
@@ -616,7 +615,7 @@ int collect_data(uint8_t **pp_data_buffer)
     sgx_status = get_pc_info(pce_enclave_eid,
                               (uint32_t*) &ecall_ret,
                               &id_enclave_report,
-                              public_key_binary,
+                              enc_public_key,
                               enc_key_size,
                               PCE_ALG_RSA_OAEP_3072,
                               encrypted_ppid,
@@ -647,18 +646,9 @@ int collect_data(uint8_t **pp_data_buffer)
         goto CLEANUP;
     }
 
-    sgx_status = ide_decrypt_ppid(id_enclave_eid,
-                                          &ecall_ret,
-                                          &pce_target_info,
-                                          &id_enclave_report,
-                                          PCE_ALG_RSA_OAEP_3072,
-                                          PPID_RSA3072_ENCRYPTED,
-                                          enc_key_size,
-                                          enc_public_key,
-                                          16,
-                                          decrypted_ppid);
+    sgx_status = ide_decrypt_ppid(id_enclave_eid, &ecall_ret, ENCRYPTED_PPID_LENGTH, encrypted_ppid, decrypted_ppid);
     if (SGX_SUCCESS != sgx_status) {
-        fprintf(stderr, "Failed to call into PCE enclave: get_pc_info. The error code is: 0x%04x.\n", sgx_status);
+        fprintf(stderr, "Failed to call into the ID_ENCLAVE: ide_decrypt_ppid. The error code is: 0x%04x.\n", sgx_status);
         ret = -1;
         goto CLEANUP;
     }
@@ -706,7 +696,6 @@ CLEANUP:
     return ret;
 
 }
-#endif
 
 bool is_valid_proxy_type(std::string& proxy_type) {
     if (proxy_type.compare("DEFAULT") == 0 ||

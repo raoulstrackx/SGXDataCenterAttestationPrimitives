@@ -101,6 +101,8 @@ typedef struct _ref_rsa_params_t {
     unsigned int iqmp[REF_IQMP_SIZE_IN_UINT];
 }ref_rsa_params_t;
 
+static ref_rsa_params_t g_rsa_key = { 0 };  // The private key used to encrypt the PPID.  Only used for PPID_CEARTEXT Cert_Data_Type
+
 /**
  * The QE_ID is a platform ID that is not associated with a particular SVN but is dependent on the Quoting Enclave's
  * (QE) MRSIGNER and its Seal Key.  The QE_ID is designed to be dependent on the seal key which is dependent on the
@@ -257,9 +259,43 @@ sgx_status_t ide_get_pce_encrypt_key(
         return(SGX_ERROR_INVALID_PARAMETER);
     }
 
+    g_rsa_key.e[0] = 0x10001;
     p_rsa_pub_key = (pce_rsaoaep_3072_encrypt_pub_key_t*)p_public_key;
-//    memcpy(p_rsa_pub_key->e, g_ref_pubkey_e_be, sizeof(p_rsa_pub_key->e));
-//    memcpy(p_rsa_pub_key->n, g_ref_pubkey_n_be, sizeof(p_rsa_pub_key->n));
+    //todo: Currenlty, the private key is stored temporarily in enclave global memory long enough
+    // to last between get_pce_encrypt_key() and store_cert_data().  These calls surround the call to the PCE
+    // get_pce_info() API.  There is a risk that if the enclave is unloaded directly or indirectly (by power state
+    // change) the private key will be lost.  There should be more documentation about this situation w/r/t
+    // detection and recovery.  Or, if that is not sufficient, then provide a way to store the key in the ECDSA
+    // blob.  Since PPID_CLEARTEXT cert_key_type is not supported at this time, we can push the solution for later.
+    sgx_status = sgx_create_rsa_key_pair(REF_RSA_OAEP_3072_MOD_SIZE,
+                                         REF_RSA_OAEP_3072_EXP_SIZE,
+                                         (unsigned char*)g_rsa_key.n,
+                                         (unsigned char*)g_rsa_key.d,
+                                         (unsigned char*)g_rsa_key.e,
+                                         (unsigned char*)g_rsa_key.p,
+                                         (unsigned char*)g_rsa_key.q,
+                                         (unsigned char*)g_rsa_key.dmp1,
+                                         (unsigned char*)g_rsa_key.dmq1,
+                                         (unsigned char*)g_rsa_key.iqmp);
+    if (sgx_status != SGX_SUCCESS) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    // PCE wants the key in big endian
+    size_t i;
+    uint8_t* p_temp;
+    p_temp = (uint8_t*)g_rsa_key.e;
+    for (i = 0; i < REF_RSA_OAEP_3072_EXP_SIZE; i++) {
+        p_rsa_pub_key->e[i] = *(p_temp + REF_RSA_OAEP_3072_EXP_SIZE - 1 - i); //create big endian e
+    }
+    p_temp = (uint8_t*)g_rsa_key.n;
+    for (i = 0; i < REF_RSA_OAEP_3072_MOD_SIZE; i++) {
+        p_rsa_pub_key->n[i] = *(p_temp + REF_RSA_OAEP_3072_MOD_SIZE - 1 - i); //create big endian n
+    }
+
+//  p_rsa_pub_key = (pce_rsaoaep_3072_encrypt_pub_key_t*)p_public_key;
+//  memcpy(p_rsa_pub_key->e, g_ref_pubkey_e_be, sizeof(p_rsa_pub_key->e));
+//  memcpy(p_rsa_pub_key->n, g_ref_pubkey_n_be, sizeof(p_rsa_pub_key->n));
 
     // report_data = SHA256(crypto_suite||rsa_pub_key)||0-padding
     do {
@@ -309,31 +345,8 @@ ret_point:
     return sgx_status;
 }
 
-sgx_status_t ide_get_ppid_encrypt_key(
-        const sgx_target_info_t* p_pce_target_info,
-        sgx_report_t* p_ide_report,
-        uint8_t crypto_suite,
-        uint16_t cert_key_type,
-        uint32_t key_size,
-        uint8_t* p_public_key)
+sgx_status_t ide_decrypt_ppid(uint32_t encrypted_ppid_size, uint8_t *p_encrypted_ppid, uint8_t* ppid)
 {
-    ref_rsa_params_t g_rsa_key = { 0 };  // The private key used to encrypt the PPID.  Only used for PPID_CEARTEXT Cert_Data_Type
-    return get_pce_encrypt_decrypt_key(p_pce_target_info, p_ide_report, crypto_suite, cert_key_type, key_size, p_public_key, &g_rsa_key);
-}
-
-sgx_status_t ide_decrypt_ppid(
-        const sgx_target_info_t* p_pce_target_info,
-        sgx_report_t* p_ide_report,
-        uint8_t crypto_suite,
-        uint16_t cert_key_type,
-        uint32_t key_size,
-        uint8_t* p_public_key,
-        uint32_t ppid_size,
-        uint8_t* ppid)
-{
-    ref_rsa_params_t g_rsa_key = { 0 };  // The private key used to encrypt the PPID.  Only used for PPID_CEARTEXT Cert_Data_Type
-    get_pce_encrypt_decrypt_key(p_pce_target_info, p_ide_report, crypto_suite, cert_key_type, key_size, p_public_key, &g_rsa_key);
-
     void *rsa_key = NULL;
     unsigned char* dec_dat = NULL;
     size_t ppid_size = 0;
@@ -362,7 +375,7 @@ sgx_status_t ide_decrypt_ppid(
     //    ret = REFQE3_ERROR_CRYPTO;
     //    goto ret_point;
     //}
-    if (!(dec_dat = (unsigned char*)malloc(ppid_size))) {
+    if (!(dec_dat = (unsigned char*)malloc(16))) {
         return SGX_ERROR_INVALID_PARAMETER;
     }
     if (SGX_SUCCESS != sgx_rsa_priv_decrypt_sha256(rsa_key,
@@ -373,136 +386,5 @@ sgx_status_t ide_decrypt_ppid(
         return SGX_ERROR_INVALID_PARAMETER;
     }
     // Copy in the decrypted PPID
-    memcpy(ppid, dec_dat, ppid_size);
-}
-
-sgx_status_t get_pce_encrypt_decrypt_key(
-        const sgx_target_info_t* p_pce_target_info,
-        sgx_report_t* p_ide_report,
-        uint8_t crypto_suite,
-        uint16_t cert_key_type,
-        uint32_t key_size,
-        uint8_t* p_public_key,
-        ref_rsa_params_t* g_rsa_key)
-{
-    sgx_status_t sgx_status = SGX_SUCCESS;
-    sgx_report_data_t report_data = { 0 };
-    sgx_sha_state_handle_t sha_handle = NULL;
-    pce_rsaoaep_3072_encrypt_pub_key_t* p_rsa_pub_key;
-
-    if (p_pce_target_info == NULL || !sgx_is_within_enclave(p_pce_target_info, sizeof(*p_pce_target_info))) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-
-    if (p_public_key == NULL || !sgx_is_within_enclave(p_public_key, key_size)) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-
-    if (p_ide_report == NULL || !sgx_is_within_enclave(p_ide_report, sizeof(*p_ide_report))) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-
-    if (crypto_suite != PCE_ALG_RSA_OAEP_3072) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-
-    if (key_size != sizeof(*p_rsa_pub_key)) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-    // Only PPID_RSA3072_ENCRYPTED is supported when using production mode PCE.
-    if (PPID_RSA3072_ENCRYPTED != cert_key_type) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-
-    if ((p_pce_target_info->attributes.flags & SGX_FLAGS_PROVISION_KEY) != SGX_FLAGS_PROVISION_KEY ||
-        (p_pce_target_info->attributes.flags & SGX_FLAGS_DEBUG) != 0)
-    {
-        //PCE must have access to provisioning key
-        //Can't be debug PCE
-        return(SGX_ERROR_INVALID_PARAMETER);
-    }
-
-    g_rsa_key.e[0] = 0x10001;
-    p_rsa_pub_key = (pce_rsaoaep_3072_encrypt_pub_key_t*)p_public_key;
-    //todo: Currenlty, the private key is stored temporarily in enclave global memory long enough
-    // to last between get_pce_encrypt_key() and store_cert_data().  These calls surround the call to the PCE
-    // get_pce_info() API.  There is a risk that if the enclave is unloaded directly or indirectly (by power state
-    // change) the private key will be lost.  There should be more documentation about this situation w/r/t
-    // detection and recovery.  Or, if that is not sufficient, then provide a way to store the key in the ECDSA
-    // blob.  Since PPID_CLEARTEXT cert_key_type is not supported at this time, we can push the solution for later.
-    sgx_status = sgx_create_rsa_key_pair(REF_RSA_OAEP_3072_MOD_SIZE,
-                                                    REF_RSA_OAEP_3072_EXP_SIZE,
-                                                    (unsigned char*)g_rsa_key.n,
-                                                    (unsigned char*)g_rsa_key.d,
-                                                    (unsigned char*)g_rsa_key.e,
-                                                    (unsigned char*)g_rsa_key.p,
-                                                    (unsigned char*)g_rsa_key.q,
-                                                    (unsigned char*)g_rsa_key.dmp1,
-                                                    (unsigned char*)g_rsa_key.dmq1,
-                                                    (unsigned char*)g_rsa_key.iqmp);
-    if (sgx_status != SGX_SUCCESS) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-
-    // PCE wants the key in big endian
-    size_t i;
-    uint8_t* p_temp;
-    p_temp = (uint8_t*)g_rsa_key.e;
-    for (i = 0; i < REF_RSA_OAEP_3072_EXP_SIZE; i++) {
-        p_rsa_pub_key->e[i] = *(p_temp + REF_RSA_OAEP_3072_EXP_SIZE - 1 - i); //create big endian e
-    }
-    p_temp = (uint8_t*)g_rsa_key.n;
-    for (i = 0; i < REF_RSA_OAEP_3072_MOD_SIZE; i++) {
-        p_rsa_pub_key->n[i] = *(p_temp + REF_RSA_OAEP_3072_MOD_SIZE - 1 - i); //create big endian n
-    }
-
-//   memcpy(p_rsa_pub_key->e, g_ref_pubkey_e_be, sizeof(p_rsa_pub_key->e));
-//   memcpy(p_rsa_pub_key->n, g_ref_pubkey_n_be, sizeof(p_rsa_pub_key->n));
-
-    // report_data = SHA256(crypto_suite||rsa_pub_key)||0-padding
-    do {
-        sgx_status = sgx_sha256_init(&sha_handle);
-        if (SGX_SUCCESS != sgx_status)
-            break;
-
-        sgx_status = sgx_sha256_update(&crypto_suite,
-                                       sizeof(uint8_t),
-                                       sha_handle);
-        if (SGX_SUCCESS != sgx_status)
-            break;
-        //(MOD followed by e)
-        sgx_status = sgx_sha256_update(p_rsa_pub_key->n,
-                                       sizeof(p_rsa_pub_key->n),
-                                       sha_handle);
-        if (SGX_SUCCESS != sgx_status)
-            break;
-        sgx_status = sgx_sha256_update(p_rsa_pub_key->e,
-                                       sizeof(p_rsa_pub_key->e),
-                                       sha_handle);
-        if (SGX_SUCCESS != sgx_status)
-            break;
-        sgx_status = sgx_sha256_get_hash(sha_handle,
-                                         reinterpret_cast<sgx_sha256_hash_t *>(&report_data));
-    } while (0);
-    if (SGX_SUCCESS != sgx_status) {
-        if (SGX_ERROR_OUT_OF_MEMORY != sgx_status)
-            sgx_status = SGX_ERROR_UNEXPECTED;
-        goto ret_point;
-    }
-
-    sgx_status = sgx_create_report(p_pce_target_info, &report_data, p_ide_report);
-    if (SGX_SUCCESS != sgx_status && SGX_ERROR_OUT_OF_MEMORY != sgx_status) {
-        sgx_status = SGX_ERROR_UNEXPECTED;
-    }
-
-    ret_point:
-    // Clear critical output data on error
-    if (SGX_SUCCESS != sgx_status) {
-        memset_s(p_ide_report, sizeof(*p_ide_report), 0, sizeof(*p_ide_report));
-    }
-    if (sha_handle != NULL) {
-        sgx_sha256_close(sha_handle);
-    }
-
-    return sgx_status;
+    memcpy(ppid, dec_dat, 16);
 }

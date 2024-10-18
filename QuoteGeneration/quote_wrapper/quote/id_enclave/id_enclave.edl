@@ -41,21 +41,9 @@ trusted {
                             uint16_t cert_key_type,
                             uint32_t key_size,
                             [out, size=key_size] uint8_t *p_public_key);
-    public sgx_status_t ide_get_ppid_encrypt_key(
-                                [in]const sgx_target_info_t *pce_target_info,
-                                [out] sgx_report_t *p_ide_report,
-                                uint8_t crypto_suite,
-                                uint16_t cert_key_type,
-                                uint32_t key_size,
-                                [out, size=key_size] uint8_t *p_public_key);
     public sgx_status_t ide_decrypt_ppid(
-                                [in]const sgx_target_info_t *pce_target_info,
-                                [out] sgx_report_t *p_ide_report,
-                                uint8_t crypto_suite,
-                                uint16_t cert_key_type,
-                                uint32_t key_size,
-                                [out, size=key_size] uint8_t *p_public_key,
-                                uint32_t ppid_size,
-                                [out, size=key_size] uint8_t *ppid);
+                                uint32_t encrypted_ppid_size,
+                                [in, size=encrypted_ppid_size] uint8_t *p_encrypted_ppid,
+                                [out, size=16] uint8_t *ppid);
     };
 };
