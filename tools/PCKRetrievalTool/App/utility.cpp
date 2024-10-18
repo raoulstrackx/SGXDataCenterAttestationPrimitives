@@ -514,80 +514,6 @@ uefi_status_t set_registration_status()
     return ret;
 }
 
-RSA* load_public_key_from_memory(const char* key_pem) {
-    BIO* bio = BIO_new_mem_buf(key_pem, -1);
-    if (!bio) {
-        fprintf(stderr, "Error creating BIO buffer.");
-        return nullptr;
-    }
-    RSA* rsa_public_key = PEM_read_bio_RSA_PUBKEY(bio, nullptr, nullptr, nullptr);
-    BIO_free(bio);
-    if (!rsa_public_key) {
-        fprintf(stderr, "Error loading public key from memory.");
-        return nullptr;
-    }
-    return rsa_public_key;
-}
-
-RSA* load_private_key_from_memory(const char* key_pem) {
-    BIO* bio = BIO_new_mem_buf(key_pem, -1);
-    if (!bio) {
-        fprintf(stderr, "Error creating BIO buffer.");
-        return nullptr;
-    }
-
-    RSA* rsa_private_key = PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, nullptr);
-    BIO_free(bio);
-
-    if (!rsa_private_key) {
-        ERR_print_errors_fp(stderr);
-        fprintf(stderr, "Error loading private key from memory.");
-        return nullptr;
-    }
-
-    return rsa_private_key;
-}
-
-
-bool populate_public_key(RSA* rsa_public_key, uint8_t* enc_public_key) {
-    const BIGNUM* n = RSA_get0_n(rsa_public_key);
-    const BIGNUM* e = RSA_get0_e(rsa_public_key);
-
-    if (!n || !e) {
-        fprintf(stderr, "Error retrieving RSA public key components.");
-        return false;
-    }
-
-    // Convert modulus to bytes
-    int n_bytes = BN_bn2bin(n, enc_public_key);
-    if (n_bytes < 0 || n_bytes > REF_RSA_OAEP_3072_MOD_SIZE) {
-        fprintf(stderr, "Error converting modulus to bytes.");
-        return false;
-    }
-
-    // Convert exponent to bytes
-    int e_bytes = BN_bn2bin(e, enc_public_key + REF_RSA_OAEP_3072_MOD_SIZE);
-    if (e_bytes < 0 || e_bytes > REF_RSA_OAEP_3072_EXP_SIZE) {
-        fprintf(stderr,"Error converting exponent to bytes.");
-        return false;
-    }
-
-    return true;
-}
-
-
-// Utility function to handle key loading and population
-bool load_and_populate_key(const char* public_key_pem, uint8_t* enc_public_key) {
-    RSA* rsa_public_key = load_public_key_from_memory(public_key_pem);
-    if (!rsa_public_key) {
-        return false;
-    }
-
-    bool result = populate_public_key(rsa_public_key, enc_public_key);
-    RSA_free(rsa_public_key);
-    return result;
-}
-
 void print_decrypted_ppid(unsigned char decrypted_ppid[], size_t length) {
     printf("Decrypted PPID: ");
     for (size_t i = 0; i < length; ++i) {
@@ -596,174 +522,8 @@ void print_decrypted_ppid(unsigned char decrypted_ppid[], size_t length) {
     printf("\n");
 }
 
-RSA* generate_identity_rsa_key() {
-    RSA* rsa = RSA_new();
-    BIGNUM* n = BN_new();
-    BIGNUM* e = BN_new();
-    BIGNUM* d = BN_new();
-
-
-    BN_set_word(n, 2^2048);
-
-    // Set both public and private exponents to 1
-    BN_set_word(e, 1);
-    BN_set_word(d, 1);
-
-    // Set RSA key components
-    RSA_set0_key(rsa, n, e, d);
-
-    return rsa;
-}
-
-// generate ecdsa quote
-// return value:
-//  0: successfully generate the ecdsa quote
-// -1: error happens.
-
-#ifdef _MSC_VER
-int generate_quote(uint8_t **quote_buffer, uint32_t& quote_size)
-{
-    int ret = -1;
-    quote3_error_t qe3_ret = SGX_QL_SUCCESS;
-    sgx_target_info_t qe_target_info;
-    sgx_report_t app_report;
-
-    // try to load quote provide library.
-    HINSTANCE quote_provider_library_handle = LoadLibrary(SGX_QL_QUOTE_CONFIG_LIB_FILE_NAME);
-    if (quote_provider_library_handle != NULL) {
-        PRINT_MESSAGE("Found the Quote provider library. \n");
-    }
-    else {
-        printf("Warning: didn't find the quote provider library. \n");
-    }  
-    
-    // try to sgx dcap quote generation library to generate quote.
-    HINSTANCE sgx_dcap_ql_handle = LoadLibrary(SGX_DCAP_QUOTE_GENERATION_LIBRARY);
-    if (sgx_dcap_ql_handle == NULL) {
-        printf("ERROR: didn't find the sgx_dcap_ql.dll library, please make sure you have installed DCAP INF installer package. \n");
-        CLOSELIBRARYHANDLE(quote_provider_library_handle);
-        return ret;
-    }
-    
-    sgx_qe_get_target_info_func_t p_sgx_qe_get_target_info = (sgx_qe_get_target_info_func_t)FINDFUNCTIONSYM(sgx_dcap_ql_handle, "sgx_qe_get_target_info");
-    sgx_qe_get_quote_size_func_t p_sgx_qe_get_quote_size = (sgx_qe_get_quote_size_func_t)FINDFUNCTIONSYM(sgx_dcap_ql_handle, "sgx_qe_get_quote_size");
-    sgx_qe_get_quote_func_t p_sgx_qe_get_quote = (sgx_qe_get_quote_func_t)FINDFUNCTIONSYM(sgx_dcap_ql_handle, "sgx_qe_get_quote");
-    if (p_sgx_qe_get_target_info == NULL || p_sgx_qe_get_quote_size == NULL || p_sgx_qe_get_quote == NULL) {
-        printf("ERROR: Can't find the quote generation functions in sgx dcap quote generation shared library.\n");
-        if (quote_provider_library_handle != NULL) {
-            CLOSELIBRARYHANDLE(quote_provider_library_handle);
-        }
-        if (sgx_dcap_ql_handle != NULL) {
-            CLOSELIBRARYHANDLE(sgx_dcap_ql_handle);
-        }
-        return ret;
-    }
-    do {
-        PRINT_MESSAGE("\nStep1: Call sgx_qe_get_target_info:");
-        qe3_ret = p_sgx_qe_get_target_info(&qe_target_info);
-        if (SGX_QL_SUCCESS != qe3_ret) {
-            printf("Error in sgx_qe_get_target_info. 0x%04x\n", qe3_ret);
-            break;
-        }
-
-        PRINT_MESSAGE("succeed! \nStep2: Call create_app_report:");
-        if (true != create_app_enclave_report(qe_target_info, &app_report)) {
-            printf("\nCall to create_app_report() failed\n");
-            break;
-        }
-
-        PRINT_MESSAGE("succeed! \nStep3: Call sgx_qe_get_quote_size:");
-        qe3_ret = p_sgx_qe_get_quote_size(&quote_size);
-        if (SGX_QL_SUCCESS != qe3_ret) {
-            printf("Error in sgx_qe_get_quote_size. 0x%04x\n", qe3_ret);
-            break;
-        }
-
-        PRINT_MESSAGE("succeed!");
-        *quote_buffer = (uint8_t*)malloc(quote_size);
-        if (NULL == *quote_buffer) {
-            printf("Couldn't allocate quote_buffer\n");
-            break;
-        }
-        memset(*quote_buffer, 0, quote_size);
-
-        // Get the Quote
-        PRINT_MESSAGE("\nStep4: Call sgx_qe_get_quote:");
-        qe3_ret = p_sgx_qe_get_quote(&app_report, quote_size, *quote_buffer);
-        if (SGX_QL_SUCCESS != qe3_ret) {
-            printf("Error in sgx_qe_get_quote. 0x%04x\n", qe3_ret);
-            break;
-        }
-        PRINT_MESSAGE("succeed!\n");
-        ret = 0;
-    } while (0);
-
-    if (quote_provider_library_handle != NULL) {
-        CLOSELIBRARYHANDLE(quote_provider_library_handle);
-    }
-    if (sgx_dcap_ql_handle != NULL) {
-        CLOSELIBRARYHANDLE(sgx_dcap_ql_handle);
-    }
-    return ret;
-}
-#else
 int collect_data(uint8_t **pp_data_buffer)
 {
-    const char* private_key_pem = R"(-----BEGIN PRIVATE KEY-----
-MIIG/gIBADANBgkqhkiG9w0BAQEFAASCBugwggbkAgEAAoIBgQC2z+NTcq2CE7ys
-p3A8at0FbhLRiBytytYtEXj6kBHHJAUZHn4zvtajFvXHOF8AIDjA2GlXuZprydGY
-0AJqE/lqQ1dHB6+R8L5U3QF7qFXMdrQW+ZOsKiL3hxHVjll9jRFFrkxjce7vDmId
-+cxvdTmcE0ITjwqm9Jr9wyxyngFVVSe+pvfqlIFgrMKtWrLdN22FiZmtwKAdoAM/
-z4+GcoPKRHp3AKaoyl479oHgI3vSNPrGBmmMyKrWJfGBJ0tELMjgj4Xc2PqKilBM
-JZUK/bl3Nb6X02JzEysbEFLoIbVcxSlE4cpbjw+ZBXtilX54pEgP84V3nQ7cxz+K
-Xeqz8xxuSPBPfjSjOJOGTePvl1u16CAFGRhj+B3bsXKVCnC3IOrZuR++A63iQYlJ
-DvzWPaVTTdyCPPabJGJoRiiA1FBX2Uu0Kdv451SlH01+/qaFanyl9qYO6bIcJPdF
-ZxJLtlN9EGMnljUVA7jmsbfs/8W5r0vAVXWnG314V2shd3xj1mMCAwEAAQKCAYEA
-mbIgIllozNLBLrs7HmCN3/HSOn1f9zFwbcWh267ic3WyH5NGcUTB+a3lBxA6tsVg
-UangrxNpY7Py1rITRZHzgMaLCznH/z/TFVAV3hwBvnwSHrrHz9hBO7BAazZZwLeo
-TNgkevsf8bY7AY6xtQduXuzGAeGiCAnggPblWJvE7TRBzQVdq8gdGeVFay+0702Z
-c8ri/HTVaPLNqIld1qBScuyttX1DoOc64Nj4CjRq9qj6KSDc/rL7Bj4yU+5wVin7
-b+x/D1bft32PXdI1GpxNeCTg6wWd4dmsX/zRE0EArzx2t2ZRfFtFuhenLJbpnn3g
-53fbdo1b0SQFIrRhRQtg6o37HroYb4sqVzITDEE6EWk9QM+NO/e4z+L870HjtoC6
-+Vdi1i+hCTHBeibwnMAnQlHByjilDtKLVK2OJyn930eOX3WKMNfac9MWn/9zHH1p
-n2vYkju8JLeNjHNOu+n08StEuB495QOAOaOMjJIwo8kjba2LdqBwoXlxYKxqKZ4x
-AoHBAOrUA2ideNOoU7NJ1pOQjDGbi45pMKu6uvV59aeEfFC/hP35U322AtpqcOa2
-OH2NKf/K726knAm7t01vGlO+k1ERGY4NamIcDdueGUrwE7XdiYQe8JEJ3CEZhhEL
-IsD4SMWBq3G//+FD2u2cyHBwWssrlRi0oru/RkOCKVTLl4P+/B0JQ/viCuTcICqg
-Si/72OSpstd3sm9U6vZ4KhaeLtoCkQJmbUKVPom+VuaIhwbqgE0PslK0RkB36s/q
-FZz4KwKBwQDHS08a7bEyWWAsHJ+nZEsAL8+P/mAmau74eNeWB3oHAOON0WRUcClt
-qtiVLyUZEK496R1p4aOCaUul/84gBRRlz4BHEFR06w817RsqJXJjkzlx+I1rayk9
-nLETa81lLVxYFhzJ/0g/p6wnxPMbNpQHDIeYPkQkpL0a3Eh8RLCptu1cVb418grP
-iVsGPPCvxSar3GV2EKxj36mkWWyxN/AHEkW+wKAPDGe+xJAtxhIxUV0tu7SoAJzk
-HIBsxUlZBqkCgcEA1YFCQCG8s6Q9xasCv1QTQx9LOYYGTH0QcxQZ998LMFeRUWEZ
-Ohj8ax2P3RQcNHrejsUyAIUFogvcUzkK1M1XH8POWkt0SBN9vgn2sR2qrhXobAm9
-bAFs9WNBc8mOJakYcQq+mEObIHMTYCrGSwS8aDEN9FJ4Cv+ToNl9Pq2E6uwwyS2d
-dCxG/2HslRT7nrj6sJxiEGmyAGtS3hjPG5Viv7DJq0b5XCpZm99FH4FOU0lusaHt
-3iguH3toMPWCBR/VAoHAPkjZBi93C6dHGUIw213K2toWYog7gIY2/Uy3A9p+VqX+
-eBoS4xjSucWFPsqnK3g9HHg4ixjLwzwpOk4CG5u6zj7VdmAyJQA5lr7tmHRvlZMz
-ht0JRaMOFoVcChfM72wHyjfO84pnCA3dDejNmZmrFbDix7/eCB28RCLIPJ4zIDdd
-Y1ggxDdLDaV93ys4hZZ2CYwt4YJAfk4udIDGKXSz/WHGjmEhJNLZsZM5BDU9BlDJ
-cDuTsFXQsrH9qQDXdY1RAoHASpm6bHMmEsEczemgvgmmxBP4UnrOz8E4sZW/Q+me
-qq6E8J/fsQD4aHHUKLKsqodod7fXnDgTkDmTwVdA5MoBXfiYKF7XIkuHMmLhAiC+
-S6Q01cvkskgkLgxMxKqJFnkloDhwDLh0jMBKG580/pdPcEqDqFKcOnOEA2KhYkrz
-jAL599g+uyRniKpzDzhBGTBiWdaj1EM5Azdtj6E/xVI0RZoQMWXVJy7vog665u5I
-nvld+W+urv1bTEzbASAq5lwE
------END PRIVATE KEY-----
-    )";
-
-    const char* public_key_pem = R"(-----BEGIN PUBLIC KEY-----
-MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAts/jU3KtghO8rKdwPGrd
-BW4S0YgcrcrWLRF4+pARxyQFGR5+M77Woxb1xzhfACA4wNhpV7maa8nRmNACahP5
-akNXRwevkfC+VN0Be6hVzHa0FvmTrCoi94cR1Y5ZfY0RRa5MY3Hu7w5iHfnMb3U5
-nBNCE48KpvSa/cMscp4BVVUnvqb36pSBYKzCrVqy3TdthYmZrcCgHaADP8+PhnKD
-ykR6dwCmqMpeO/aB4CN70jT6xgZpjMiq1iXxgSdLRCzI4I+F3Nj6iopQTCWVCv25
-dzW+l9NicxMrGxBS6CG1XMUpROHKW48PmQV7YpV+eKRID/OFd50O3Mc/il3qs/Mc
-bkjwT340oziThk3j75dbteggBRkYY/gd27FylQpwtyDq2bkfvgOt4kGJSQ781j2l
-U03cgjz2myRiaEYogNRQV9lLtCnb+OdUpR9Nfv6mhWp8pfamDumyHCT3RWcSS7ZT
-fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
------END PUBLIC KEY-----
-    )";
-
     sgx_status_t sgx_status = SGX_SUCCESS;
     sgx_status_t ecall_ret = SGX_SUCCESS;
     sgx_key_128bit_t platform_id = { 0 };
@@ -773,11 +533,10 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
 
     sgx_enclave_id_t pce_enclave_eid = 0;
     sgx_enclave_id_t id_enclave_eid = 0;
-    
+
     sgx_report_t id_enclave_report;
     uint32_t enc_key_size = REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE;
     uint8_t enc_public_key[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
-    uint8_t public_key_binary[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
     uint8_t encrypted_ppid[REF_RSA_OAEP_3072_MOD_SIZE];
     uint32_t encrypted_ppid_ret_size;
     pce_info_t pce_info;
@@ -785,19 +544,8 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
     sgx_target_info_t pce_target_info;
 
     sgx_get_target_info_func_t p_sgx_get_target_info = NULL;
-
-    unsigned char decrypted_ppid[ENCRYPTED_PPID_LENGTH];
-    int decrypted_size = -1;
+    uint8_t decrypted_ppid[16];
     bool load_flag = false;
-    RSA* identity_rsa_key = generate_identity_rsa_key();
-
-    // populate public key array for `get_pc_info`
-    if (!populate_public_key(identity_rsa_key, public_key_binary)) {
-        fprintf(stderr, "Failed to load RSA public key.\n");
-        ret = -1;
-        goto CLEANUP;
-    }
-
 
     load_flag = get_urts_library_handle();
     if(false == load_flag) {// can't find urts shared library to load enclave
@@ -845,14 +593,14 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
         goto CLEANUP;
     }
 
-    sgx_status = ide_get_pce_encrypt_key(id_enclave_eid,
+    sgx_status = ide_get_ppid_encrypt_key(id_enclave_eid,
                                          &ecall_ret,
                                          &pce_target_info,
                                          &id_enclave_report,
                                          PCE_ALG_RSA_OAEP_3072,
                                          PPID_RSA3072_ENCRYPTED,
                                          enc_key_size,
-                                         public_key_binary);
+                                         enc_public_key);
     if (SGX_SUCCESS != sgx_status) {
         fprintf(stderr, "Failed to call into the ID_ENCLAVE: get_report_and_pce_encrypt_key. The error code is: 0x%04x.\n", sgx_status);
         ret = -1;
@@ -899,23 +647,23 @@ fRBjJ5Y1FQO45rG37P/Fua9LwFV1pxt9eFdrIXd8Y9ZjAgMBAAE=
         goto CLEANUP;
     }
 
-    // Decrypt the data using the RSA private key
-
-    decrypted_size = RSA_private_decrypt(REF_RSA_OAEP_3072_MOD_SIZE,
-                                             encrypted_ppid,
-                                             decrypted_ppid,
-                                             identity_rsa_key,
-                                             RSA_PKCS1_OAEP_PADDING);
-
-    if (decrypted_size == -1) {
-        fprintf(stderr, "Failed to decrypt using RSA private key.\n");
+    sgx_status = ide_decrypt_ppid(id_enclave_eid,
+                                          &ecall_ret,
+                                          &pce_target_info,
+                                          &id_enclave_report,
+                                          PCE_ALG_RSA_OAEP_3072,
+                                          PPID_RSA3072_ENCRYPTED,
+                                          enc_key_size,
+                                          enc_public_key,
+                                          16,
+                                          decrypted_ppid);
+    if (SGX_SUCCESS != sgx_status) {
+        fprintf(stderr, "Failed to call into PCE enclave: get_pc_info. The error code is: 0x%04x.\n", sgx_status);
         ret = -1;
         goto CLEANUP;
     }
 
-    print_decrypted_ppid(decrypted_ppid, ENCRYPTED_PPID_LENGTH);
-
-    RSA_free(identity_rsa_key);
+    print_decrypted_ppid(decrypted_ppid, sizeof(decrypted_ppid));
 
     buffer_size = ENCRYPTED_PPID_LENGTH + CPU_SVN_LENGTH + ISV_SVN_LENGTH + PCE_ID_LENGTH + DEFAULT_PLATFORM_ID_LENGTH;
     *pp_data_buffer = (uint8_t *) malloc(buffer_size);
