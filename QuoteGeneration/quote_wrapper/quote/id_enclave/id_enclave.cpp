@@ -278,7 +278,7 @@ sgx_status_t ide_get_pce_encrypt_key(
                                          (unsigned char*)g_rsa_key.dmq1,
                                          (unsigned char*)g_rsa_key.iqmp);
     if (sgx_status != SGX_SUCCESS) {
-        return SGX_ERROR_INVALID_PARAMETER;
+        return sgx_status;
     }
 
     // PCE wants the key in big endian
@@ -347,13 +347,14 @@ ret_point:
 
 sgx_status_t ide_decrypt_ppid(uint32_t encrypted_ppid_size, uint8_t *p_encrypted_ppid, uint8_t* ppid)
 {
+    sgx_status_t sgx_status = SGX_SUCCESS;
     void *rsa_key = NULL;
     unsigned char* dec_dat = NULL;
     size_t ppid_size = 0;
     // Decrypt the PPID with the RSA private key generated with the new key and store it in the blob
     // Create a private key context
     /// todo: add a check to see if the private key was lost due to enlave unload or power loss.
-    if (SGX_SUCCESS != sgx_create_rsa_priv2_key(REF_RSA_OAEP_3072_MOD_SIZE,
+    sgx_status = sgx_create_rsa_priv2_key(REF_RSA_OAEP_3072_MOD_SIZE,
                                                 REF_E_SIZE_IN_BYTES,
                                                 (const unsigned char*)g_rsa_key.e,
                                                 (const unsigned char*)g_rsa_key.p,
@@ -361,30 +362,41 @@ sgx_status_t ide_decrypt_ppid(uint32_t encrypted_ppid_size, uint8_t *p_encrypted
                                                 (const unsigned char*)g_rsa_key.dmp1,
                                                 (const unsigned char*)g_rsa_key.dmq1,
                                                 (const unsigned char*)g_rsa_key.iqmp,
-                                                &rsa_key)) {
-        return SGX_ERROR_INVALID_PARAMETER;
+                                                &rsa_key);
+
+    if (sgx_status != SGX_SUCCESS) {
+        return sgx_status;
     }
-    if (SGX_SUCCESS != sgx_rsa_priv_decrypt_sha256(rsa_key,
-                                                   NULL,
-                                                   (&ppid_size),
-                                                   p_encrypted_ppid,
-                                                   REF_RSA_OAEP_3072_MOD_SIZE)) {
-        return SGX_ERROR_INVALID_PARAMETER;
+
+    sgx_status = sgx_rsa_priv_decrypt_sha256(rsa_key,
+                                             NULL,
+                                             (&ppid_size),
+                                             p_encrypted_ppid,
+                                             REF_RSA_OAEP_3072_MOD_SIZE);
+
+    if (sgx_status != SGX_SUCCESS) {
+        return sgx_status;
     }
+
     //if (sizeof(ciphertext_data.ppid) < ppid_size) {
     //    ret = REFQE3_ERROR_CRYPTO;
     //    goto ret_point;
     //}
-    if (!(dec_dat = (unsigned char*)malloc(16))) {
+    if (!(dec_dat = (unsigned char*)malloc(ppid_size))) {
         return SGX_ERROR_INVALID_PARAMETER;
     }
-    if (SGX_SUCCESS != sgx_rsa_priv_decrypt_sha256(rsa_key,
+    sgx_status = sgx_rsa_priv_decrypt_sha256(rsa_key,
                                                    dec_dat,
                                                    (&ppid_size),
                                                    p_encrypted_ppid,
-                                                   REF_RSA_OAEP_3072_MOD_SIZE)) {
-        return SGX_ERROR_INVALID_PARAMETER;
+                                                   REF_RSA_OAEP_3072_MOD_SIZE);
+
+    if (sgx_status != SGX_SUCCESS) {
+        return sgx_status;
     }
+
     // Copy in the decrypted PPID
     memcpy(ppid, dec_dat, 16);
+
+    return sgx_status;
 }
