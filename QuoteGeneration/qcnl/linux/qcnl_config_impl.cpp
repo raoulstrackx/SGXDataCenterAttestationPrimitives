@@ -29,8 +29,8 @@
  *
  */
 /**
- * File: qcnl_config.cpp 
- *  
+ * File: qcnl_config_impl.cpp
+ *
  * Description: Read configuration data
  *
  */
@@ -40,17 +40,18 @@
 #include <algorithm>
 #include <curl/curl.h>
 #include <fstream>
+#include <cstdlib>
 
-static struct init_solib {
-    init_solib() {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-    }
-} _init_solib;
+const char* get_config_path() {
+    const char* env_path = std::getenv("QCNL_CONF_PATH");
+    return env_path != nullptr ? env_path : "/etc/sgx_default_qcnl.conf";
+}
 
-bool QcnlConfigLegacy::load_config() {
+sgx_qcnl_error_t QcnlConfigLegacy::load_config() {
     // read configuration File
     bool use_collateral_service = false;
-    ifstream ifs("/etc/sgx_default_qcnl.conf");
+    std::ifstream ifs(get_config_path());
+
     if (ifs.is_open()) {
         string line;
         auto f = [](unsigned char const c) { return std::isspace(c); };
@@ -90,12 +91,24 @@ bool QcnlConfigLegacy::load_config() {
             } else if (name.compare("PCK_CACHE_EXPIRE_HOURS") == 0) {
                 try {
                     string::size_type sz;
-                    cache_expire_hour_ = stoi(value, &sz);
-                    if (cache_expire_hour_ > CACHE_MAX_EXPIRY_HOURS)
-                        cache_expire_hour_ = CACHE_MAX_EXPIRY_HOURS;
+                    pck_cache_expire_hours_ = (double)stoi(value, &sz);
+                    if (pck_cache_expire_hours_ > CACHE_MAX_EXPIRY_HOURS)
+                        pck_cache_expire_hours_ = CACHE_MAX_EXPIRY_HOURS;
                 } catch (const invalid_argument &) {
                     continue;
                 }
+            } else if (name.compare("VERIFY_COLLATERAL_CACHE_EXPIRE_HOURS") == 0) {
+                try {
+                    string::size_type sz;
+                    verify_collateral_expire_hours_ = (double)stoi(value, &sz);
+                    if (verify_collateral_expire_hours_ > CACHE_MAX_EXPIRY_HOURS)
+                        verify_collateral_expire_hours_ = CACHE_MAX_EXPIRY_HOURS;
+                } catch (const invalid_argument &) {
+                    continue;
+                }
+            } else if (name.compare("LOCAL_CACHE_ONLY") == 0 &&
+                       (value.compare("TRUE") == 0 || value.compare("true") == 0)) {
+                local_cache_only_ = true;
             } else {
                 continue;
             }
@@ -105,9 +118,9 @@ bool QcnlConfigLegacy::load_config() {
         collateral_service_url_ = server_url_;
     }
 
-    return true;
+    return SGX_QCNL_SUCCESS;
 }
 
-bool QcnlConfigJson::load_config() {
-    return this->load_config_json("/etc/sgx_default_qcnl.conf");
+sgx_qcnl_error_t QcnlConfigJson::load_config() {
+    return this->load_config_json(get_config_path());
 }

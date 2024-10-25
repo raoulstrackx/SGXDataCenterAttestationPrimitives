@@ -144,10 +144,11 @@
       <Optimization>Disabled</Optimization>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\package\include;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;$(ProjectDir)..\..\QVL/Src/AttestationParsers/src;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(SGXSDKInstallPath)include;$(SGXSDKInstallPath)include\tlibc;$(SGXSDKInstallPath)include\libc++;$(SGXSDKInstallPath)include\epid;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Enclave;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts_sim.lib;sgx_tstdc.lib;sgx_tservice_sim.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -166,10 +167,11 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\package\include;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;$(ProjectDir)..\..\QVL/Src/AttestationParsers/src;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(SGXSDKInstallPath)include;$(SGXSDKInstallPath)include\tlibc;$(SGXSDKInstallPath)include\libc++;$(SGXSDKInstallPath)include\epid;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Enclave;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -188,10 +190,11 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\package\include;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;$(ProjectDir)..\..\QVL/Src/AttestationParsers/src;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(SGXSDKInstallPath)include;$(SGXSDKInstallPath)include\tlibc;$(SGXSDKInstallPath)include\libc++;$(SGXSDKInstallPath)include\epid;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Enclave;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -209,11 +212,12 @@
       <Optimization>Disabled</Optimization>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\package\include;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;$(ProjectDir)..\..\QVL/Src/AttestationParsers/src;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(SGXSDKInstallPath)include;$(SGXSDKInstallPath)include\tlibc;$(SGXSDKInstallPath)include\libc++;$(SGXSDKInstallPath)include\epid;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Enclave;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
       <AdditionalOptions>/d2FH4- %(AdditionalOptions)</AdditionalOptions>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -231,11 +235,12 @@
       <Optimization>Disabled</Optimization>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\package\include;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;$(ProjectDir)..\..\QVL/Src/AttestationParsers/src;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(SGXSDKInstallPath)include;$(SGXSDKInstallPath)include\tlibc;$(SGXSDKInstallPath)include\libc++;$(SGXSDKInstallPath)include\epid;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Enclave;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
       <AdditionalOptions>/d2FH4- %(AdditionalOptions)</AdditionalOptions>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts_sim.lib;sgx_tstdc.lib;sgx_tservice_sim.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -254,13 +259,14 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\package\include;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;$(ProjectDir)..\..\QVL/Src/AttestationParsers/src;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(SGXSDKInstallPath)include;$(SGXSDKInstallPath)include\tlibc;$(SGXSDKInstallPath)include\libc++;$(SGXSDKInstallPath)include\epid;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Enclave;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PreprocessorDefinitions>NDEBUG;SGX_TRUSTED;_WINDOWS;OPENSSL_NO_FILENAMES</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;SGX_TRUSTED;_WINDOWS;OPENSSL_NO_FILENAMES;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
       <AdditionalOptions>/d2FH4- %(AdditionalOptions)</AdditionalOptions>
       <UseFullPaths>false</UseFullPaths>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -282,10 +288,11 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\package\include;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;$(ProjectDir)..\..\QVL/Src/AttestationParsers/src;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(SGXSDKInstallPath)include;$(SGXSDKInstallPath)include\tlibc;$(SGXSDKInstallPath)include\libc++;$(SGXSDKInstallPath)include\epid;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Enclave;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -298,10 +305,11 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -316,6 +324,9 @@
     <ClCompile Include="..\..\QVL\Src\AttestationCommons\src\Utils\TimeUtils.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\Json\TcbComponent.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\Json\TdxModule.cpp" />
+    <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\Json\TdxModuleIdentity.cpp" />
+    <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\Json\TdxModuleTcb.cpp" />
+    <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\Json\TdxModuleTcbLevel.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\ParserUtils.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\X509\Configuration.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationParsers\src\X509\PlatformPckCertificate.cpp" />

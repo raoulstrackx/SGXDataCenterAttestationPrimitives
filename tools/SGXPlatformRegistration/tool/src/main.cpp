@@ -40,6 +40,8 @@
 #else
 #include <regex>
 #endif
+#include <sstream>
+#include <iomanip>
 #include <string.h>
 #include <inttypes.h>
 #include <map>
@@ -51,15 +53,18 @@
 #include "common.h"
 #include "defs.h"
 
-#define MANAGMENT_TOOL_GET_PLATFORM_MANIFEST    "-get_platform_manifest"
-#define MANAGMENT_TOOL_GET_KEY_BLOBS            "-get_key_blobs"
-#define MANAGMENT_TOOL_SET_SERVER_INFO          "-set_server_info"
+#define MANAGMENT_TOOL_GET_PLATFORM_MANIFEST       "-get_platform_manifest"
+#define MANAGMENT_TOOL_GET_ADD_PACKAGE_REQUEST     "-get_add_package"
+#define MANAGMENT_TOOL_SET_MEMBERSHIP_CERTIFICATES "-set_membership_certificates"
+#define MANAGMENT_TOOL_GET_KEY_BLOBS               "-get_key_blobs"
+#define MANAGMENT_TOOL_GET_SERVER_INFO             "-get_server_info"
+#define MANAGMENT_TOOL_SET_SERVER_INFO             "-set_server_info"
 
-#define MANAGMENT_TOOL_USAGE_INFO               "-h"
-#define MANAGMENT_TOOL_VERBOSE_LOG              "-v"
-#define MANAGMENT_TOOL_GET_REG_STATUS           "-get_registration_status"
-#define MANAGMENT_TOOL_GET_REG_ERROR_CODE       "-get_last_registration_error_code"
-#define MANAGMENT_TOOL_GET_SGX_STATUS           "-get_sgx_status"
+#define MANAGMENT_TOOL_USAGE_INFO                  "-h"
+#define MANAGMENT_TOOL_VERBOSE_LOG                 "-v"
+#define MANAGMENT_TOOL_GET_REG_STATUS              "-get_registration_status"
+#define MANAGMENT_TOOL_GET_REG_ERROR_CODE          "-get_last_registration_error_code"
+#define MANAGMENT_TOOL_GET_SGX_STATUS              "-get_sgx_status"
 
 #define COVERT_TO_NEG(num)      num * (-1)
 
@@ -110,8 +115,13 @@ int usage() {
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-v\t\t\t\t\t\t\t Verbose logs.");
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-get_platform_manifest <file_name>\t\t\t Copies Platform Manifest into a file. Sets registration status to completed.");
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n  \t\t\t\t\t\t\t The users responsibility is to pass Platform Manifest to registration server.");
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-get_add_package <file_name>\t\t\t\t Copies pending Add Package request into a file.");
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n  \t\t\t\t\t\t\t The users responsibility is to pass Add Package to registration server");
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n  \t\t\t\t\t\t\t and set the resulting Platform Certificate using -set_membership_certificates.");
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-set_membership_certificates <file_name>\t\t Sets the Membership Certificates from file into BIOS, completing Add Package.");
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-get_key_blobs <key_blobs_file_name>\t\t\t Copies Package Info Key Blobs into a file. Sets package info status to completed.");
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-set_server_info <server_id_file_name> <hex_flags> <URL> Sets registration server configurations.");
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-get_server_info\t\t\t\t\t Prints SGX server information.");
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-get_registration_status\t\t\t\t Prints and returns registration status.");
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-get_last_registration_error_code\t\t\t Prints and returns last registration error code.");
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "\n-get_sgx_status\t\t\t\t\t\t Prints SGX status.");
@@ -128,7 +138,12 @@ int setVerboseLog() {
     return 0;
 }
 
-int performGetPlatformManifest(const char *fileName) {
+enum class UEFI_REQUEST_TYPE {
+    PLATFORM_MANIFEST,
+    ADD_PACKAGE    
+};
+
+int getUefiRequest(const char *fileName, UEFI_REQUEST_TYPE type) {
     int ret = 0;
     uint8_t buffer[MAX_REQUEST_SIZE];
     uint16_t buffSize = sizeof(buffer);
@@ -136,12 +151,19 @@ int performGetPlatformManifest(const char *fileName) {
 
     if (gargc - 2 != 1) {
         management_log_message(MP_REG_LOG_LEVEL_ERROR, "Invalid number of parameters, please use the following syntax:\n");
-        management_log_message(MP_REG_LOG_LEVEL_FUNC, "mpa_manage -get_platform_manifest <file_name>\n");
+        management_log_message(MP_REG_LOG_LEVEL_FUNC, "mpa_manage %s <file_name>\n", ((type == UEFI_REQUEST_TYPE::ADD_PACKAGE)? MANAGMENT_TOOL_GET_ADD_PACKAGE_REQUEST : MANAGMENT_TOOL_GET_PLATFORM_MANIFEST));
         goto out;
     }
     
-    res = manage->getPlatformManifest(buffer, buffSize);
+    if (type == UEFI_REQUEST_TYPE::ADD_PACKAGE) {
+        res = manage->getAddPackageRequest(buffer, buffSize);
+    } else {
+        res = manage->getPlatformManifest(buffer, buffSize);
+    }
     if (MP_SUCCESS != res) {
+        if(MP_INSUFFICIENT_PRIVILEGES == res)  {
+            management_log_message(MP_REG_LOG_LEVEL_INFO, "Warning: The registration complete flag could NOT be set, maybe the UEFI variable is in read-only mode.\n");
+        }
         ret = (int)res;
         goto out;
     }
@@ -151,10 +173,20 @@ int performGetPlatformManifest(const char *fileName) {
         management_log_message(MP_REG_LOG_LEVEL_ERROR, "Unable to write to file:  \"%s\"\n", fileName);
         goto out;
     }
-    
-    management_log_message(MP_REG_LOG_LEVEL_FUNC, "PlatformManifest successfully written to: %s\n", fileName);
+
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "%s successfully written to: %s\n", 
+                           ((type == UEFI_REQUEST_TYPE::ADD_PACKAGE)? "AddPackage request" : "PlatformManifest"),
+                           fileName);
 out:
     return COVERT_TO_NEG(ret);
+}
+
+int performGetPlatformManifest(const char *fileName) {
+    return getUefiRequest(fileName, UEFI_REQUEST_TYPE::PLATFORM_MANIFEST);
+}
+
+int performGetAddPackage(const char *fileName) {
+    return getUefiRequest(fileName, UEFI_REQUEST_TYPE::ADD_PACKAGE);    
 }
 
 int performGetKeyBlob(const char *fileName) {
@@ -170,7 +202,10 @@ int performGetKeyBlob(const char *fileName) {
     }
     
     res = manage->getPackageInfoKeyBlobs(buffer, buffSize);
-    if (MP_SUCCESS != res) {
+    if (MP_SUCCESS != res ) {
+        if(MP_INSUFFICIENT_PRIVILEGES == res) {
+            management_log_message(MP_REG_LOG_LEVEL_INFO, "Warning: The package info complete flag could NOT be set, maybe the UEFI variable is in read-only mode.\n");
+        }
         ret = (int)res;
         goto out;
     }
@@ -255,6 +290,9 @@ int performSetServerInfo(const char *fileName) {
 
     res = manage->setRegistrationServerInfo(flags, string(param2, strnlen(param2, MAX_PATH_SIZE)), (uint8_t*)&serverId, (uint16_t)buffSize);
     if (MP_SUCCESS != res) {
+        if(MP_INSUFFICIENT_PRIVILEGES == res) {
+            management_log_message(MP_REG_LOG_LEVEL_INFO, "Warning: The registration server information could NOT be set, maybe the UEFI variable is in read-only mode.\n");
+        }
         ret = (int)res;
         goto out;
     }
@@ -264,6 +302,36 @@ out:
 #ifndef _WIN32
     regfree(&regex);
 #endif
+    return COVERT_TO_NEG(ret);
+}
+
+int performSetMembershipCertificates(const char *fileName) {
+    int ret = 0;
+    uint8_t mcBuffer[MAX_DATA_SIZE];
+    size_t buffSize = sizeof(mcBuffer);
+    MpResult res = MP_UNEXPECTED_ERROR;
+
+    if (gargc - 2 != 1) {
+        management_log_message(MP_REG_LOG_LEVEL_ERROR, "Invalid number of parameters, please use the following syntax:\n");
+        management_log_message(MP_REG_LOG_LEVEL_FUNC, "mpa_manage %s <file_name>\n", MANAGMENT_TOOL_SET_MEMBERSHIP_CERTIFICATES );
+        goto out;
+    }
+
+    ret = readFileToBuffer(fileName, (uint8_t*)&mcBuffer, buffSize);
+    if (ret != 0) {
+        management_log_message(MP_REG_LOG_LEVEL_ERROR, "Unable to read the Membership Certificate file: \"%s\"\n", fileName);
+        goto out;
+    }
+
+    res = manage->setMembershipCertificates((uint8_t*)&mcBuffer, (uint16_t)buffSize);
+    if (MP_SUCCESS != res) {
+        ret = (int)res;
+        management_log_message(MP_REG_LOG_LEVEL_FUNC, "MembershipCertificate installation failed with code %d\n", ret);
+        goto out;
+    }
+
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "MembershipCertificate installed successfully, please reboot the system.\n");
+out:
     return COVERT_TO_NEG(ret);
 }
 
@@ -279,6 +347,7 @@ int performGetRegErrorCode() {
     }
     
     management_log_message(MP_REG_LOG_LEVEL_FUNC, "Last reported registration error code: %x\n", (int)err);
+    management_log_message(MP_REG_LOG_LEVEL_INFO, "Warning: Maybe the whole SGX UEFI variables are in read-only mode, so this error code is not accurate.\n");
     ret = (int)err;
 out:
     return ret;
@@ -301,6 +370,7 @@ int performGetRegStatus() {
         management_log_message(MP_REG_LOG_LEVEL_FUNC, "Registration process completed successfully.\n");
     } else {
         management_log_message(MP_REG_LOG_LEVEL_FUNC, "Registration is in progress.\n");
+        management_log_message(MP_REG_LOG_LEVEL_INFO, "Warning: Maybe the whole SGX UEFI variables are in read-only mode, so the registration status is not accurate.\n");
     }
     
     ret = (int)status;
@@ -326,6 +396,36 @@ int performGetSgxStatus() {
 out:
     return ret;
 }
+
+
+std::string byteArrayToHexString(uint8_t* buffer, uint16_t size) {
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    for (int i = 0; i < size; i++) {
+        ss << std::setw(2) << static_cast<int>(buffer[i]);
+    }
+    return ss.str();
+}
+
+
+int performGetServerInfo() {
+    uint16_t flags = 0;
+    std::string url = "";
+    uint8_t serverId[MAX_DATA_SIZE]; // unused 
+    uint16_t serverIdSize = sizeof(serverId);
+
+    MpResult res = manage->getRegistrationServerInfo(flags, url, serverId, serverIdSize);
+
+    if (MP_SUCCESS != res) {
+        return COVERT_TO_NEG((int)res);
+    }
+
+    management_log_message(MP_REG_LOG_LEVEL_FUNC, "SGX server: %s\nFlags: 0x%04X\nServer Id: %s\n", 
+        url.c_str(), flags, byteArrayToHexString(serverId, serverIdSize).c_str());
+
+    return MP_SUCCESS;
+}
+
 
 int main(int argc, char * argv[]) {
     int ret = 0;
@@ -353,7 +453,10 @@ int main(int argc, char * argv[]) {
 #endif
         // Read UEFI path
         AgentConfiguration agentConfigurations;
-        agentConfigurations.read(conf);
+        if (!agentConfigurations.read(conf)) {
+            //indented msg to gel with the "ERROR:"
+            management_log_message(MP_REG_LOG_LEVEL_FUNC, "       Default UEFI path variable [%s] will be used \n", EFIVARS_FILE_SYSTEM);
+        }
 
         // Initiate management
         manage = new MPManagement(string(conf.uefi_path));
@@ -371,11 +474,14 @@ int main(int argc, char * argv[]) {
         optionsWithArgs[MANAGMENT_TOOL_GET_PLATFORM_MANIFEST] = performGetPlatformManifest;
         optionsWithArgs[MANAGMENT_TOOL_GET_KEY_BLOBS] = performGetKeyBlob;
         optionsWithArgs[MANAGMENT_TOOL_SET_SERVER_INFO] = performSetServerInfo;
-
+        optionsWithArgs[MANAGMENT_TOOL_GET_ADD_PACKAGE_REQUEST] = performGetAddPackage;
+        optionsWithArgs[MANAGMENT_TOOL_SET_MEMBERSHIP_CERTIFICATES] = performSetMembershipCertificates;
+        
         optionsNoArgs[MANAGMENT_TOOL_USAGE_INFO] = usage;
         optionsNoArgs[MANAGMENT_TOOL_GET_REG_ERROR_CODE] = performGetRegErrorCode;
         optionsNoArgs[MANAGMENT_TOOL_GET_REG_STATUS] = performGetRegStatus;
         optionsNoArgs[MANAGMENT_TOOL_GET_SGX_STATUS] = performGetSgxStatus;
+        optionsNoArgs[MANAGMENT_TOOL_GET_SERVER_INFO] = performGetServerInfo;
 
         std::map<const string, handle_func_with_args>::iterator itWithArgs = optionsWithArgs.begin();
         std::map<const string, handle_func>::iterator itNoArgs = optionsNoArgs.begin();

@@ -60,6 +60,7 @@
 
 #include <stdint.h>
 #include <string>
+#include "network_wrapper.h"
 
 typedef enum {
     UEFI_OPERATION_SUCCESS = 0,
@@ -85,19 +86,23 @@ uefi_status_t get_platform_manifest(uint8_t ** buffer, uint16_t& out_buffer_size
 //  UEFI_OPERATION_UNEXPECTED_ERROR: error happens.
 uefi_status_t set_registration_status();
 
-// generate ecdsa quote
 // return value:
-//  0: successfully generate the ecdsa quote
+//  0: successfully collect data
 // -1: error happens.
-#ifdef _MSC_VER
-int generate_quote(uint8_t **quote_buffer, uint32_t& quote_size);
-#else
 int collect_data(uint8_t **p_data_buffer);
-#endif
 
 bool is_valid_proxy_type(std::string& proxy_type);
 
 bool is_valid_use_secure_cert(std::string& use_secure_cert);
+
+bool is_valid_tcb_update_type(std::string& tcb_update_type);
+
+
+network_post_error_t generate_json_message_body(const uint8_t *raw_data, 
+                                                const uint32_t raw_data_size,
+                                                const uint16_t platform_id_length,
+                                                const bool non_enclave_mode, 
+                                                std::string &jsonString);
 
 #ifdef _MSC_VER
 bool get_program_path(TCHAR *p_file_path, size_t buf_size);

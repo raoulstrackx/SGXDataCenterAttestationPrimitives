@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2011-2024 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,21 +28,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#define STRFILEVER    "1.14.100.3"
-#define COPYRIGHT      "Copyright (C) 2022 Intel Corporation"
-#define FILEVER        1,14,100,3
-#define PRODUCTVER     1,14,100,3
-#define STRPRODUCTVER  "1.14.100.3"
+#define STRFILEVER    "1.22.100.3"
+#define COPYRIGHT      "Copyright (C) 2024 Intel Corporation"
+#define FILEVER        1,22,100,3
+#define PRODUCTVER     1,22,100,3
+#define STRPRODUCTVER  "1.22.100.3"
 #define COMPANYNAME    "Intel Corporation"
 #define PRODUCTNAME    "Intel® Software Guard Extensions"
 
-#define DEFAULT_QPL_VERSION          "1.13.100.3"
-#define QUOTE_VERIFIER_VERSION       "1.12.100.3"
-#define QUOTE_LOADER_VERSION         "1.11.103.3"
-#define TDQE_WRAPPER_VERSION         "1.14.100.3"
-#define PCE_WRAPPER_VERSION          "1.14.100.3"
+#define DEFAULT_QPL_VERSION          "1.13.109.3"
+#define QUOTE_VERIFIER_VERSION       "1.13.102.3"
+#define QUOTE_LOADER_VERSION         "1.11.109.3"
+#define TDQE_WRAPPER_VERSION         "1.14.109.3"
+#define PCE_WRAPPER_VERSION          "1.14.109.3"
 
-#define QE3_VERSION                  "1.14.100.2"
-#define QVE_VERSION                  "1.14.100.2"
-#define IDE_VERSION                  "1.14.100.2"
-#define TDQE_VERSION                 "1.14.100.2"
+#define QE3_VERSION                  "1.22.100.1"
+#define QVE_VERSION                  "1.22.100.1"
+#define IDE_VERSION                  "1.22.100.1"
+#define TDQE_VERSION                 "1.22.100.1"
+#define QAE_VERSION                  "1.22.100.1"

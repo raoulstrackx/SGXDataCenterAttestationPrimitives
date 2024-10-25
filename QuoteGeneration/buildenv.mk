@@ -48,11 +48,28 @@ my-dir = $(call parent-dir,$(lastword $(MAKEFILE_LIST)))
 ROOT_DIR              := $(call my-dir)
 COMMON_DIR            := $(ROOT_DIR)/common
 
-SGX_VER:= $(shell awk '$$2 ~ /STRFILEVER/ { print substr($$3, 2, length($$3) - 2); }' $(COMMON_DIR)/inc/internal/se_version.h)
-SGX_MAJOR_VER:= $(shell echo $(SGX_VER) |awk -F. '{print $$1}')
-SPLIT_VERSION=$(word $2,$(subst ., ,$1))
+#--------------------------------------------------------------------------------------
+# Function: get_full_version
+# Arguments: 1: the version name of library
+# Returns: Return the full version.
+#---------------------------------------------------------------------------------------
+get_full_version = $(shell awk '$$2 ~ /$1/ { print substr($$3, 2, length($$3) - 2); }' $(COMMON_DIR)/inc/internal/se_version.h)
+
+#--------------------------------------------------------------------------------------
+# Function: get_major_version
+# Arguments: 1: the version name of library
+# Returns: Return the major version.
+#---------------------------------------------------------------------------------------
+get_major_version = $(word 1,$(subst ., ,$(call get_full_version,$1)))
+
+SGX_VER:= $(call get_full_version,STRFILEVER)
+SGX_MAJOR_VER:= $(call get_major_version,STRFILEVER)
+
+# If the value of _FORTIFY_SOURCE is greater than 2, use the value, else use 2.
+FORTIFY_SOURCE_VAL:= $(lastword $(sort $(word 2,$(subst =, ,$(filter -D_FORTIFY_SOURCE=%,$(CFLAGS)))) 2))
 
 CP    := cp -f
+LN    := ln -sf
 MKDIR := mkdir -p
 STRIP := strip
 OBJCOPY := objcopy
@@ -66,8 +83,15 @@ SGX_MODE ?= HW
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 0
 
-ifneq ($(MAKECMDGOALS),clean)
-include $(SGX_SDK)/buildenv.mk
+ifndef SERVTD_ATTEST
+    ifneq ($(origin SGX_SDK),file)
+        include $(SGX_SDK)/buildenv.mk
+    else
+        ifneq ($(SDK_NOT_REQUIRED), 1)
+            $(info You may need to set environment variables if the SGX SDK is installed.)
+            $(info Use a command like 'source /opt/intel/sgxsdk/environment')
+        endif
+    endif
 endif
 
 ifeq ($(shell getconf LONG_BIT), 32)
@@ -115,7 +139,7 @@ ifdef DEBUG
     COMMON_FLAGS += -O0 -ggdb -DDEBUG -UNDEBUG
     COMMON_FLAGS += -DSE_DEBUG_LEVEL=SE_TRACE_DEBUG -DDEBUG_MODE=1
 else
-    COMMON_FLAGS += -O2 -D_FORTIFY_SOURCE=2 -UDEBUG -DNDEBUG
+    COMMON_FLAGS += -O2 -D_FORTIFY_SOURCE=$(FORTIFY_SOURCE_VAL) -UDEBUG -DNDEBUG
 endif
 
 ifdef SE_SIM
@@ -188,6 +212,10 @@ ifneq ($(MITIGATION-CVE-2020-0551), LOAD)
     endif
 endif
 
+ifdef SERVTD_ATTEST
+COMMON_FLAGS += -DSERVTD_ATTEST
+endif
+
 CFLAGS   += $(COMMON_FLAGS)
 CXXFLAGS += $(COMMON_FLAGS)
 
@@ -210,3 +238,12 @@ ENCLAVE_CXXFLAGS = $(ENCLAVE_CFLAGS) -nostdinc++
 ENCLAVE_LDFLAGS  = $(COMMON_LDFLAGS) -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
                    -Wl,-pie,-eenclave_entry -Wl,--export-dynamic  \
                    -Wl,--defsym,__ImageBase=0
+
+SERVTD_ATTEST_LINUX_TRUNK_ROOT_PATH := $(ROOT_DIR)/../../..
+SERVTD_ATTEST_STD_INC_PATH := $(SERVTD_ATTEST_LINUX_TRUNK_ROOT_PATH)/common/inc
+SERVTD_ATTEST_STD_LIB_PATH := $(SERVTD_ATTEST_LINUX_TRUNK_ROOT_PATH)/build/linux
+SERVTD_ATTEST_CFLAGS := $(CFLAGS) -ffreestanding -nostdinc -fPIC -fvisibility=hidden -DSERVTD_ATTEST
+SERVTD_ATTEST_CXXFLAGS := $(SERVTD_ATTEST_CFLAGS) -nostdinc++
+SERVTD_ATTEST_LDFLAGS := -nostdlib -nodefaultlibs -nostartfiles  \
+                        -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--export-dynamic -Wl,--gc-sections -g
+SERVTD_ATTEST_BUILD_DIR := $(BUILD_DIR)/servtd_attest

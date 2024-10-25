@@ -1,4 +1,5 @@
 import urllib
+import urllib3
 import requests
 import json
 import binascii
@@ -9,6 +10,7 @@ from platform import system
 from lib.intelsgx.credential import Credentials
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+from pkg_resources import parse_version
 
 certBegin= '-----BEGIN CERTIFICATE-----'
 certEnd= '-----END CERTIFICATE-----'
@@ -26,6 +28,7 @@ class PCS:
     HDR_TCB_INFO_ISSUER_CHAIN = 'SGX-TCB-Info-Issuer-Chain'
     HDR_PCK_Certificate_Issuer_Chain = 'SGX-PCK-Certificate-Issuer-Chain'
     HDR_Enclave_Identity_Issuer_Chain = 'SGX-Enclave-Identity-Issuer-Chain'
+    HDR_FMSPC = 'SGX-FMSPC'
 
     def __init__(self, url, apiVersion,key):
         self.BaseUrl = url
@@ -55,7 +58,10 @@ class PCS:
         
         PARAMS = {}
         https = requests.Session()
-        https.mount("https://", HTTPAdapter(max_retries=Retry(method_whitelist=["HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"])))
+        if parse_version(urllib3.__version__) < parse_version('1.26.0'):
+            https.mount("https://", HTTPAdapter(max_retries=Retry(method_whitelist=["HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"])))
+        else:
+            https.mount("https://", HTTPAdapter(max_retries=Retry(allowed_methods=["HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"])))
         r = https.get(url = url, headers=headers, params = PARAMS, verify=True)
 
         return r
@@ -70,7 +76,10 @@ class PCS:
         
         PARAMS = {}
         https = requests.Session()
-        https.mount("https://", HTTPAdapter(max_retries=Retry(method_whitelist=["HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"])))
+        if parse_version(urllib3.__version__) < parse_version('1.26.0'):
+            https.mount("https://", HTTPAdapter(max_retries=Retry(method_whitelist=["HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"])))
+        else:
+            https.mount("https://", HTTPAdapter(max_retries=Retry(allowed_methods=["HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"])))
         r = https.post(url = url, headers=headers, params = PARAMS, data=json.dumps(data), verify=True)
 
         return r
@@ -127,7 +136,9 @@ class PCS:
             store_ctx= crypto.X509StoreContext(store, pycert)
             try:
                 store_ctx.verify_certificate()
-            except crypto.X509StoreContextError:
+            except crypto.X509StoreContextError as e:
+                # Printing or logging the error details
+                print(e)
                 return False
 
         return True
@@ -139,10 +150,12 @@ class PCS:
         # the first byte, prepend 0x00 to indicate an unsigned value.
 
         r= signature[0:32]
+        r= r.lstrip(b'\x00')
         if r[0] & 0x80:
             r= bytes([0])+r
 
         s= signature[32:]
+        s= s.lstrip(b'\x00')
         if s[0] & 0x80:
             s= bytes([0])+s
 
@@ -393,7 +406,7 @@ class PCS:
         certs_pem= []
         url= self._geturl('pckcerts')
 
-        if self.ApiVersion >= 3 and len(platform_manifest) > 0 :
+        if self.ApiVersion >= 3 and platform_manifest :
             data = {}
             data["pceid"] = pceid
             data["platformManifest"] = platform_manifest
@@ -421,7 +434,6 @@ class PCS:
             return None
     
         # Validate the certificates with signer
-
         chain= parse.unquote(
             response.headers[PCS.HDR_PCK_Certificate_Issuer_Chain]
         )
@@ -457,7 +469,7 @@ class PCS:
             self.error("Could not validate certificate using trust chain")
             return None
 
-        return [certs_available, certs_not_available, response.headers[PCS.HDR_PCK_Certificate_Issuer_Chain]]
+        return [certs_available, certs_not_available, response.headers[PCS.HDR_PCK_Certificate_Issuer_Chain], response.headers[PCS.HDR_FMSPC]]
 
 
 #----------------------------------------------------------------------------
@@ -515,13 +527,42 @@ class PCS:
         return [crl_str, response.headers['SGX-PCK-CRL-Issuer-Chain']]
 
 #----------------------------------------------------------------------------
+# PCS: Get FMSPC List
+#----------------------------------------------------------------------------
+
+    def get_fmspcs(self, platform, dec=None):
+        self.clear_errors()
+        if ( platform not in ['all', 'client', 'E3', 'E5'] ):
+            self.error('Invalid argument')
+            return None
+
+        url= self._geturl('fmspcs')
+        if self.ApiVersion<4:
+            self.error('API /fmspcs not supported')
+            return None
+        else:
+            url+= "?platform={:s}".format(platform)
+
+        response= self._get_request(url, False)
+        if response.status_code != 200:
+            self.error(response.status_code)
+            return None
+
+        # Verify expected headers
+        if not response.headers['Request-ID']:
+            self.error("Response missing Request-ID header")
+            return None
+
+        return response.json()
+
+#----------------------------------------------------------------------------
 # PCS: Get TCB Info
 #----------------------------------------------------------------------------
 
-    def get_tcb_info(self, fmspc, type, dec=None):
+    def get_tcb_info(self, fmspc, type, update, dec=None):
         self.clear_errors()
         url= self._geturl('tcb', type)
-        url+= "?fmspc={:s}".format(fmspc)
+        url+= "?fmspc={:s}&update={:s}".format(fmspc,update)
 
         response= self._get_request(url, False)
         if response.status_code != 200:
@@ -595,13 +636,14 @@ class PCS:
 # PCS: Get QE/QVE/TD_QE Identity
 #----------------------------------------------------------------------------
 
-    def get_enclave_identity(self, name, dec=None):
+    def get_enclave_identity(self, name, update, dec=None):
         self.clear_errors()
 
         if name == 'tdqe':
             url= self._geturl('qe/identity', 'tdx')
         else:
             url= self._geturl(name + '/identity', 'sgx')
+        url+= "?update={:s}".format(update)
 
         response= self._get_request(url, False)
         if response.status_code != 200:

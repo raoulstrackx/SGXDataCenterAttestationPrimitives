@@ -29,8 +29,8 @@
  *
  */
 /**
- * File: sgx_dcap_qpl.h 
- *  
+ * File: sgx_default_quote_provider.h
+ *
  * Description: Definitions and prototypes for the Quote Provider Library
  *
  */
@@ -54,15 +54,21 @@ quote3_error_t sgx_ql_get_quote_verification_collateral(const uint8_t *fmspc,
 quote3_error_t sgx_ql_get_quote_verification_collateral_with_params(const uint8_t *fmspc,
                                                                     const uint16_t fmspc_size,
                                                                     const char *pck_ca,
-                                                                    const void* custom_param,
+                                                                    const void *custom_param,
                                                                     const uint16_t custom_param_length,
                                                                     sgx_ql_qve_collateral_t **pp_quote_collateral);
 quote3_error_t sgx_ql_free_quote_verification_collateral(sgx_ql_qve_collateral_t *p_quote_collateral);
-quote3_error_t tdx_ql_get_quote_verification_collateral(const uint8_t *fmspc, 
-                                                        uint16_t fmspc_size, 
+quote3_error_t tdx_ql_get_quote_verification_collateral(const uint8_t *fmspc,
+                                                        uint16_t fmspc_size,
                                                         const char *pck_ca,
-                                                        tdx_ql_qve_collateral_t **pp_quote_collateral);
-quote3_error_t tdx_ql_free_quote_verification_collateral(tdx_ql_qve_collateral_t *p_quote_collateral);
+                                                        tdx_ql_qv_collateral_t **pp_quote_collateral);
+quote3_error_t tdx_ql_get_quote_verification_collateral_with_params(const uint8_t *fmspc,
+                                                                    const uint16_t fmspc_size,
+                                                                    const char *pck_ca,
+                                                                    const void *custom_param,
+                                                                    const uint16_t custom_param_length,
+                                                                    tdx_ql_qv_collateral_t **pp_quote_collateral);
+quote3_error_t tdx_ql_free_quote_verification_collateral(tdx_ql_qv_collateral_t *p_quote_collateral);
 quote3_error_t sgx_ql_get_qve_identity(char **pp_qve_identity,
                                        uint32_t *p_qve_identity_size,
                                        char **pp_qve_identity_issuer_chain,
@@ -70,7 +76,18 @@ quote3_error_t sgx_ql_get_qve_identity(char **pp_qve_identity,
 quote3_error_t sgx_ql_free_qve_identity(char *p_qve_identity, char *p_qve_identity_issuer_chain);
 quote3_error_t sgx_ql_get_root_ca_crl(uint8_t **pp_root_ca_crl, uint16_t *p_root_ca_crl_size);
 quote3_error_t sgx_ql_free_root_ca_crl(uint8_t *p_root_ca_crl);
-quote3_error_t sgx_ql_set_logging_callback(sgx_ql_logging_callback_t logger);
+quote3_error_t sgx_ql_set_logging_callback(sgx_ql_logging_callback_t logger, sgx_ql_log_level_t loglevel = SGX_QL_LOG_ERROR);
+quote3_error_t sgx_qpl_clear_cache(uint32_t cache_type);
+quote3_error_t sgx_qpl_global_init();
+quote3_error_t sgx_qpl_global_cleanup();
+
+#ifndef _MSC_VER
+quote3_error_t tee_get_default_platform_policy(const uint8_t *fmspc,
+                                               const uint16_t fmspc_size,
+                                               uint8_t **pp_platform_policy,
+                                               uint32_t *p_platform_policy_size);
+quote3_error_t tee_free_platform_policy(uint8_t *p_platform_policy);
+#endif
 
 #if defined(__cplusplus)
 }

@@ -39,17 +39,32 @@
 #define _SGX_DCAP_QV_INTERNAL_H_
 
 #include "sgx_qve_header.h"
-#include "sgx_qve_def.h"
+#include "sgx_ql_quote.h"
+#include "sgx_error.h"
+#include "sgx_eid.h"
+#include <atomic>
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
+#define SGX_QUOTE_TYPE 0x0
+#define TDX_QUOTE_TYPE 0x81
+#define USER_DATA_MAX_LEN 128
+
 typedef enum {
-	    SGX_EVIDENCE = 0,
-	    TDX_EVIDENCE,
-        UNKNOWN_QUOTE_TYPE
-} tee_evidence_type_t;
+    CLASS_SGX_QVL = 0,
+    CLASS_SGX_QVE,
+    CLASS_TDX_QVL,
+    CLASS_TDX_QVE
+} tee_class_type_t;
+
+// Default policy is SGX_QL_EPHEMERAL, which is same with legacy DCAP QVL behavior
+//
+extern std::atomic<sgx_ql_request_policy_t> g_qve_policy;
+extern std::atomic<bool> policy_set_once;
+
+extern sgx_enclave_id_t g_qve_eid;
 
 //SGX&TDX untrusted quote verification related APIs
 //
@@ -64,6 +79,20 @@ quote3_error_t sgx_qvl_verify_quote(
     uint32_t supplemental_data_size,
     uint8_t *p_supplemental_data);
 
+quote3_error_t  tee_qvl_verify_quote_qvt(
+    const uint8_t *p_quote,
+    uint32_t quote_size,
+    time_t current_time,
+    const sgx_ql_qve_collateral_t *p_quote_collateral,
+    sgx_ql_qe_report_info_t *p_qve_report_info,
+    const uint8_t *p_user_data,
+    uint32_t user_data_size,
+    uint32_t *verification_result_token_buffer_size,
+    uint8_t **p_verification_result_token);
+
+void ocall_qvt_token_malloc(uint64_t verification_result_token_buffer_size,
+    uint8_t **p_verification_result_token);
+
 quote3_error_t sgx_qvl_get_quote_supplemental_data_size(
     uint32_t *p_data_size);
 
@@ -74,6 +103,10 @@ quote3_error_t sgx_qvl_get_quote_supplemental_data_version(
 quote3_error_t qvl_get_fmspc_ca_from_quote(const uint8_t* p_quote, uint32_t quote_size,
      unsigned char* p_fmsp_from_quote, uint32_t fmsp_from_quote_size,
      unsigned char* p_ca_from_quote, uint32_t ca_from_quote_size);
+
+sgx_status_t load_qve_once(sgx_enclave_id_t *p_qve_eid);
+
+sgx_status_t unload_qve_once(sgx_enclave_id_t *p_qve_eid);
 
 #if defined(__cplusplus)
 }

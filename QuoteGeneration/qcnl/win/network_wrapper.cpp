@@ -48,6 +48,7 @@ extern bool g_isWin81OrLater;
 
 static sgx_qcnl_error_t windows_last_error_to_qcnl_error(void) {
     DWORD ec = GetLastError();
+    qcnl_log(SGX_QL_LOG_ERROR, "[QCNL] Error in WinHttp : %ld. \n", ec);
     switch (ec) {
     case ERROR_WINHTTP_CONNECTION_ERROR:
     case ERROR_WINHTTP_CANNOT_CONNECT:
@@ -113,7 +114,7 @@ static sgx_qcnl_error_t pccs_status_to_qcnl_error(DWORD pccs_status_code) {
 * @return SGX_QCNL_SUCCESS Call https post successfully. Other return codes indicate an error occured.
 */
 sgx_qcnl_error_t qcnl_https_request_once(const char *url,
-                                         http_header_map& header_map,
+                                         const http_header_map& header_map,
                                          const char *req_body,
                                          uint32_t req_body_size,
                                          const uint8_t *user_token,
@@ -179,7 +180,7 @@ sgx_qcnl_error_t qcnl_https_request_once(const char *url,
         hRequest = WinHttpOpenRequest(hConnect, pwszVerb, urlComp.lpszUrlPath,
                                       L"HTTP/1.0", WINHTTP_NO_REFERER,
                                       WINHTTP_DEFAULT_ACCEPT_TYPES,
-                                      WINHTTP_FLAG_SECURE);
+                                      _wcsnicmp(wurl, L"https", 5) == 0 ? WINHTTP_FLAG_SECURE : 0);
         if (!hRequest) {
             ret = windows_last_error_to_qcnl_error();
             break;
@@ -216,7 +217,7 @@ sgx_qcnl_error_t qcnl_https_request_once(const char *url,
         }
 
         // add custom headers
-        http_header_map::iterator it = header_map.begin();
+        http_header_map::const_iterator it = header_map.begin();
         while (it != header_map.end()) {
             string key = it->first;
             string value = it->second;
@@ -414,7 +415,7 @@ cleanup:
 }
 
 sgx_qcnl_error_t qcnl_https_request(const char *url,
-                                    http_header_map& header_map,
+                                    const http_header_map& header_map,
                                     const char *req_body,
                                     uint32_t req_body_size,
                                     const uint8_t *user_token,
@@ -427,6 +428,8 @@ sgx_qcnl_error_t qcnl_https_request(const char *url,
     uint32_t retry_times = QcnlConfig::Instance()->getRetryTimes() + 1;
     uint32_t retry_delay = QcnlConfig::Instance()->getRetryDelay();
     uint32_t current_delay_time = 1; // wait 1 second before first retry
+
+    qcnl_log(SGX_QL_LOG_INFO, "[QCNL] Request URL %s \n", url);
 
     while (retry_times > 0) {
         ret = qcnl_https_request_once(url, header_map, req_body, req_body_size, user_token, user_token_size,

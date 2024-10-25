@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2011-2022 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,6 +32,7 @@
 #ifndef QGS_SERVER_H
 #define QGS_SERVER_H
 
+#include <stdint.h>
 #include <boost/asio.hpp>
 #include <boost/scoped_ptr.hpp>
 
@@ -42,9 +43,9 @@ namespace intel { namespace sgx { namespace dcap { namespace qgs {
 
     class QgsServer {
     public:
-        QgsServer(asio::io_service& io_service, gs::endpoint& ep);
-        ~QgsServer();
-        void shutdown();
+      QgsServer(asio::io_service &io_service, gs::endpoint &ep, uint8_t num_threads);
+      ~QgsServer();
+      void shutdown();
 
     private:
         QgsServer();
@@ -56,4 +57,3 @@ namespace intel { namespace sgx { namespace dcap { namespace qgs {
     };
 }}}}
 #endif /* QGS_SERVER_H */
-

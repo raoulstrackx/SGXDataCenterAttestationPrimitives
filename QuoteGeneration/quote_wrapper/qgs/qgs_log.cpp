@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2011-2022 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -83,6 +83,7 @@ void sgx_proc_log_report(int level, const char *format, ...)
             priority = LOG_INFO;
             break;
         default:
+            va_end(ap);
             return;//ignore
     }
     if (!_nosyslog) {

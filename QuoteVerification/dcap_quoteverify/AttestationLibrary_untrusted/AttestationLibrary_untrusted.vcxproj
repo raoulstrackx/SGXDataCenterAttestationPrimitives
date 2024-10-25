@@ -87,10 +87,11 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/src;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Include;$(SolutionDir)prebuilt\openssl\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;_ATTESTATIONLIBRARY_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <TreatWarningAsError>true</TreatWarningAsError>
       <ControlFlowGuard>Guard</ControlFlowGuard>
-      <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4101;4244</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -108,10 +109,11 @@
       <Optimization>Disabled</Optimization>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/src;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Include;$(SolutionDir)prebuilt\openssl\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_WINDOWS;_ATTESTATIONLIBRARY_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <TreatWarningAsError>true</TreatWarningAsError>
       <ControlFlowGuard>Guard</ControlFlowGuard>
-      <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4101;4244</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -131,12 +133,13 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\QVL/Src/;$(ProjectDir)..\..\QVL/Src/ThirdParty/rapidjson/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include;$(ProjectDir)..\..\QVL/Src/AttestationCommons/include/Utils;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/include/;$(ProjectDir)..\..\QVL/Src/AttestationLibrary/src;$(ProjectDir)..\..\QVL/Src/AttestationParsers/include/;..\Include;$(ProjectDir)..\..\../QuoteGeneration/common/inc/internal;$(ProjectDir)..\..\../QuoteGeneration/quote_wrapper/common/inc;$(VCToolsInstallDir)\include;$(ProjectDir)..\..\QvE\Include;$(SolutionDir)prebuilt\openssl\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;_ATTESTATIONLIBRARY_EXPORTS;OPENSSL_NO_FILENAMES</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC;OPENSSL_NO_FILENAMES</PreprocessorDefinitions>
       <TreatWarningAsError>true</TreatWarningAsError>
       <ControlFlowGuard>Guard</ControlFlowGuard>
-      <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4101;4244</DisableSpecificWarnings>
       <UseFullPaths>false</UseFullPaths>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -160,10 +163,11 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;_ATTESTATIONLIBRARY_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SGX_TRUSTED;_WINDOWS;ATTESTATIONLIBRARY_STATIC;ATTESTATIONPARSERS_STATIC</PreprocessorDefinitions>
       <TreatWarningAsError>true</TreatWarningAsError>
       <ControlFlowGuard>Guard</ControlFlowGuard>
-      <DisableSpecificWarnings>4101</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4101;4244</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>sgx_trts.lib;sgx_tstdc.lib;sgx_tservice.lib;sgx_tcxx.lib;sgx_tcrypto.lib</AdditionalDependencies>
@@ -184,6 +188,9 @@
     <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\OpensslHelpers\SignatureVerification.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\OpensslHelpers\DigestUtils.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\QuoteVerification\QuoteStructures.cpp" />
+    <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\Verifiers\Checks\TcbLevelCheck.cpp" />
+    <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\Verifiers\Checks\TDRelaunchCheck.cpp" />
+    <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\Verifiers\Checks\TdxModuleCheck.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\Verifiers\TCBSigningChain.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\Verifiers\PckCertVerifier.cpp" />
     <ClCompile Include="..\..\QVL\Src\AttestationLibrary\src\Verifiers\CommonVerifier.cpp" />

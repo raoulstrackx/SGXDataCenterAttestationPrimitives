@@ -55,7 +55,8 @@ using namespace std;
 #define MAX_HEADER_SIZE 1024
 #define LOCAL_NETWORK_SETTING "./network_setting.conf"
 
-static bool g_use_secure_cert = true;
+extern bool g_use_secure_cert;
+
 typedef enum _ProxyType
 {
     PROXY_TYPE_DEFAULT_PROXY   = 0,
@@ -69,6 +70,7 @@ extern string proxy_type_string;
 extern string proxy_url_string ;
 extern string user_token_string ;
 extern string use_secure_cert_string ;
+extern string tcb_update_type_string;
 
 static network_post_error_t windows_last_error_to_network_post_error(void)
 {
@@ -101,6 +103,8 @@ static network_post_error_t windows_last_error_to_network_post_error(void)
 static bool process_configuration_setting(const char *config_file_name, string& url, ProxyType &proxy_type, string &proxy_url, string& user_token)
 {
     bool ret = true;
+    bool config_file_exist = true;
+    bool config_file_provide_pccs_url=false;
     ifstream ifs(config_file_name);
     string line;
     if (ifs.is_open()) {
@@ -116,10 +120,12 @@ static bool process_configuration_setting(const char *config_file_name, string& 
             if (name.compare("PCCS_URL") == 0) {
                 if (server_url_string.empty() == true) {
                     url = value;
+                    fprintf(stdout,"the pccs_url setting coming from network_setting.conf, and the value is: %s.\n", value.c_str());
                 }
                 else {
                     url = server_url_string + "/sgx/certification/v4/platforms";
                 }
+                config_file_provide_pccs_url = true;
             }
             else if (name.compare("USE_SECURE_CERT") == 0) {
                 if (use_secure_cert_string.empty() == true) {
@@ -127,9 +133,7 @@ static bool process_configuration_setting(const char *config_file_name, string& 
                     if (value.compare("FALSE") == 0) {
                         g_use_secure_cert = false;
                     }
-                }
-                else if (use_secure_cert_string.compare("FALSE") == 0 || use_secure_cert_string.compare("false") == 0) {
-                    g_use_secure_cert = false;
+                    fprintf(stdout,"the use_secure_cert setting coming from network_setting.conf, and the value is: %s.\n", value.c_str());
                 }
             }
             else if (name.compare("PROXY_TYPE") == 0) {
@@ -147,6 +151,7 @@ static bool process_configuration_setting(const char *config_file_name, string& 
                     else {
                         proxy_type = PROXY_TYPE_DEFAULT_PROXY;
                     }
+                    fprintf(stdout,"the proxy_type setting coming from network_setting.conf, and the value is: %s.\n", value.c_str());
                 }
                 else {
                     if (proxy_type_string.compare("DIRECT") == 0 || proxy_type_string.compare("direct") == 0) {
@@ -156,7 +161,7 @@ static bool process_configuration_setting(const char *config_file_name, string& 
                         proxy_type = PROXY_TYPE_MANUAL_PROXY;
                     }
                     else if (proxy_type_string.compare("AUTO") == 0 || proxy_type_string.compare("auto") == 0) {
-                        proxy_type = PROXY_TYPE_DIRECT_ACCESS;
+                        proxy_type = PROXY_TYPE_AUTOMATIC;
                     }
                     else  {
                         proxy_type = PROXY_TYPE_DEFAULT_PROXY;
@@ -167,21 +172,28 @@ static bool process_configuration_setting(const char *config_file_name, string& 
                 if (proxy_url_string.empty() == true) {
                     proxy_url = value;
                 }
+                fprintf(stdout,"the proxy_url setting coming from network_setting.conf, and the value is: %s.\n", value.c_str());
             } 
             else if (name.compare("USER_TOKEN") == 0) {
                 if (user_token_string.empty() == true) {
                     user_token = value;
                 }
+                fprintf(stdout,"the user_token setting coming from network_setting.conf, and the value is: *** (actual value hidden).\n");
             } 
+            else if (name.compare("TCB_UPDATE_TYPE") == 0){
+                if(tcb_update_type_string.empty() == true) {
+                    std::transform(value.begin(), value.end(), value.begin(), [](auto ch) {return static_cast<char>(::towupper(ch)); });
+                    tcb_update_type_string = value;
+                }
+                fprintf(stdout,"the tcb_update_type setting coming from network_setting.conf, and the value is: %s.\n", value.c_str());
+            }
             else {
                 continue;
             }
         }
     }
     else {
-        if (use_secure_cert_string.compare("FALSE") == 0 || use_secure_cert_string.compare("false") == 0) {
-            g_use_secure_cert = true;
-        }
+        config_file_exist = false;
 
         if (proxy_type_string.compare("DIRECT") == 0 || proxy_type_string.compare("direct") == 0) {
             proxy_type = PROXY_TYPE_DIRECT_ACCESS;
@@ -195,9 +207,26 @@ static bool process_configuration_setting(const char *config_file_name, string& 
         else {
             proxy_type = PROXY_TYPE_DEFAULT_PROXY;
         }
-        url = server_url_string + "/sgx/certification/v2/platforms";
+
+        if(server_url_string.empty() == false) {
+            url = server_url_string + "/sgx/certification/v4/platforms";
+        }
         ret = false;
     }
+
+    if(config_file_exist && config_file_provide_pccs_url == false) {
+        if(server_url_string.empty() == false) {
+            url = server_url_string + "/sgx/certification/v4/platforms";
+        }
+    }
+
+    if(tcb_update_type_string.compare("EARLY") == 0) {
+        url = url + "?update=early";
+    }
+    else if(tcb_update_type_string.compare("ALL") == 0) {
+        url = url + "?update=all";
+    }
+
     return ret;
 }
 
@@ -210,185 +239,46 @@ static void network_configuration(string &url, ProxyType &proxy_type, string &pr
 	process_configuration_setting(LOCAL_NETWORK_SETTING, url, proxy_type, proxy_url, user_token);	
 }
 
-/**
-* Method converts byte containing value from 0x00-0x0F into its corresponding ASCII code,
-* e.g. converts 0x00 to '0', 0x0A to 'A'.
-* Note: This is mainly a helper method for internal use in byte_array_to_hex_string().
-*
-* @param in byte to be converted (allowed values: 0x00-0x0F)
-*
-* @return ASCII code representation of the byte or 0 if method failed (e.g input value was not in provided range).
-*/
-static uint8_t convert_value_to_ascii(uint8_t in)
-{
-	if (in <= 0x09)
-	{
-		return (uint8_t)(in + '0');
-	}
-	else if (in <= 0x0F)
-	{
-		return (uint8_t)(in - 10 + 'A');
-	}
-
-	return 0;
-}
-
-//Function to do HEX encoding of array of bytes
-//@param in_buf, bytes array whose length is in_size
-//       out_buf, output the HEX encoding of in_buf on success.
-//@return true on success and false on error
-//The out_size must always be 2*in_size since each byte into encoded by 2 characters
-static bool byte_array_to_hex_string(const uint8_t *in_buf, uint32_t in_size, uint8_t *out_buf, uint32_t out_size)
-{
-	if (in_size>UINT32_MAX / 2)return false;
-	if (in_buf == NULL || out_buf == NULL || out_size != in_size * 2)return false;
-
-	for (uint32_t i = 0; i< in_size; i++)
-	{
-		*out_buf++ = convert_value_to_ascii(static_cast<uint8_t>(*in_buf >> 4));
-		*out_buf++ = convert_value_to_ascii(static_cast<uint8_t>(*in_buf & 0xf));
-		in_buf++;
-	}
-	return true;
-}
-                     
-
-/**
-* This function appends request parameters of byte array type to the UR in HEX string format
-*
-* @param url Request UR
-* @param request  Request parameter in byte array
-* @param request_size Size of byte array
-*
-* @return true If the byte array was appended to the UR successfully
-*/
-static network_post_error_t append_body_context(string& url, const uint8_t* request, const uint32_t request_size)
-{
-	if (request_size >= UINT32_MAX / 2)
-		return POST_INVALID_PARAMETER_ERROR;
-
-	uint8_t* hex = (uint8_t*)malloc(request_size * 2);
-	if (!hex)
-		return POST_OUT_OF_MEMORY_ERROR;
-	if (!byte_array_to_hex_string(request, request_size, hex, request_size * 2)) {
-		free(hex);
-		return POST_UNEXPECTED_ERROR;
-	}
-	url.append(reinterpret_cast<const char*>(hex), request_size * 2);
-	free(hex);
-	return POST_SUCCESS;
-}
-
-static network_post_error_t generate_json_message_body(const uint8_t *raw_data, 
-                                                       const uint32_t raw_data_size,
-                                                       const uint16_t platform_id_length,
-                                                       const bool non_enclave_mode, 
-                                                       string &jsonString)
-{
-    network_post_error_t ret = POST_SUCCESS;
-    const uint8_t *position = raw_data;
-
-    jsonString = "{";
-    if (true == non_enclave_mode) {
-        jsonString += "\"pce_id\": \"";
-        if ((ret = append_body_context(jsonString, position, PCE_ID_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-        jsonString += "\" ,\"qe_id\": \"";
-        position = position + PCE_ID_LENGTH;
-        if ((ret = append_body_context(jsonString, position, platform_id_length)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"platform_manifest\": \"";
-        position = position + platform_id_length;
-        if ((ret = append_body_context(jsonString, position, raw_data_size - PCE_ID_LENGTH - platform_id_length)) != POST_SUCCESS) {
-            return ret;
-        }
-    }
-    else {
-        uint32_t left_size = raw_data_size - platform_id_length - CPU_SVN_LENGTH - ISV_SVN_LENGTH - PCE_ID_LENGTH - ENCRYPTED_PPID_LENGTH;
-        jsonString += "\"enc_ppid\": \"";
-        if ((ret = append_body_context(jsonString, position, ENCRYPTED_PPID_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"pce_id\": \"";
-        position = position + ENCRYPTED_PPID_LENGTH;
-        if ((ret = append_body_context(jsonString, position, PCE_ID_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-        jsonString += "\" ,\"cpu_svn\": \"";
-        position = position + PCE_ID_LENGTH;
-        if ((ret = append_body_context(jsonString, position, CPU_SVN_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"pce_svn\": \"";
-        position = position + CPU_SVN_LENGTH;
-        if ((ret = append_body_context(jsonString, position, ISV_SVN_LENGTH)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"qe_id\": \"";
-        position = position + ISV_SVN_LENGTH;
-        if ((ret = append_body_context(jsonString, position, platform_id_length)) != POST_SUCCESS) {
-            return ret;
-        }
-
-        jsonString += "\" ,\"platform_manifest\": \"";
-        if (left_size != 0) {
-            position = position + platform_id_length;
-            if ((ret = append_body_context(jsonString, position, left_size)) != POST_SUCCESS) {
-                return ret;
-            }
-        }
-
-    }
-    jsonString += "\" }";
-    return ret;
-}
-
 network_post_error_t network_https_post(const uint8_t* raw_data, const uint32_t raw_data_size, const uint16_t platform_id_length, const bool non_enclave_mode)
 {
     if (raw_data_size < platform_id_length + static_cast<uint32_t>(PCE_ID_LENGTH )) {
         return POST_INVALID_PARAMETER_ERROR;
     }
 
-	network_post_error_t ret = POST_UNEXPECTED_ERROR;  
+    network_post_error_t ret = POST_UNEXPECTED_ERROR;  
     string strJson("");
     ret = generate_json_message_body(raw_data, raw_data_size, platform_id_length, non_enclave_mode, strJson);
     if (ret != POST_SUCCESS) {
-        printf("Error: unexpected error happens during generate json message body.\n");
+        printf("Error: unexpected error occurred while generating json message body.\n");
         return ret;
     } 
     
     ret = POST_UNEXPECTED_ERROR;
 
-	// initialize https request url
-	string url(server_url_string);
+    // initialize https request url
+    string url(server_url_string);
     ProxyType proxy_type = PROXY_TYPE_DEFAULT_PROXY;
     string proxy_url(proxy_url_string);
     string user_token(user_token_string);
-	// initialize network configuration
-	network_configuration(url, proxy_type, proxy_url, user_token);
+    // initialize network configuration
+    network_configuration(url, proxy_type, proxy_url, user_token);
     HINTERNET  hSession = NULL, hConnect = NULL, hRequest = NULL;
 
-	//WinHTTP API explicitly use UNICODE so that we should use WCHAR instead of TCHAR
-	WCHAR wurl[MAX_PATH];
-	WCHAR wproxyurl[MAX_PATH];
-	WCHAR whostname[MAX_PATH];
-	size_t count = 0;
-	if (mbstowcs_s(&count, wurl, url.c_str(), url.size()) != 0) {
-		return POST_UNEXPECTED_ERROR;
-	}
+    //WinHTTP API explicitly use UNICODE so that we should use WCHAR instead of TCHAR
+    WCHAR wurl[MAX_PATH];
+    WCHAR wproxyurl[MAX_PATH];
+    WCHAR whostname[MAX_PATH];
+    size_t count = 0;
+    if (mbstowcs_s(&count, wurl, url.c_str(), url.size()) != 0) {
+        return POST_UNEXPECTED_ERROR;
+    }
 
     do {
         //WinHTTP API explicitly use UNICODE so that we should use WCHAR instead of TCHAR
         URL_COMPONENTS urlCompccs;
         ZeroMemory(&urlCompccs, sizeof(urlCompccs));
-		URL_COMPONENTS proxyurlCompccs;
-		ZeroMemory(&urlCompccs, sizeof(proxyurlCompccs));
+        URL_COMPONENTS proxyurlCompccs;
+        ZeroMemory(&urlCompccs, sizeof(proxyurlCompccs));
         urlCompccs.dwStructSize = sizeof(urlCompccs);
         urlCompccs.lpszHostName = whostname;//we will only crack hostname, urlpath 
         urlCompccs.dwHostNameLength = MAX_PATH;//copy hostname to a buffer to get 0-terminated string

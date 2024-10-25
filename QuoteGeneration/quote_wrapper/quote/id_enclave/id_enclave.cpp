@@ -204,7 +204,7 @@ ret_point:
  *                  PPID_RSA3072_ENCRYPTED.
  *
  * @param key_size [In] The size in bytes of the supplied p_public_key buffer.  Currently, it must be equal to the size
- *                 of an RSA3072 public key. 4 byte 'e' and 256 byte 'n'.
+ *                 of an RSA3072 public key. 4 bytes 'e' and 384 bytes 'n'.
  * @param p_public_key
  *                 [In, Out] Pointer to the buffer that will contain the public key used to encrypt the PPID. It must
  *                 not be NULL and the buffer must reside within the enclave's memory space.
@@ -293,6 +293,7 @@ sgx_status_t ide_get_pce_encrypt_key(
         p_rsa_pub_key->n[i] = *(p_temp + REF_RSA_OAEP_3072_MOD_SIZE - 1 - i); //create big endian n
     }
 
+    // Raoul: (3) You'll need something like this. The PCE enclave requires that you pass in a report specifically designed for it. sgx reports can be used to sign something for a particular enclave. It's the key part of local attestation, and a way to set up a secure channel between two enclaves on the same platform. For us it wouldn't be required, but we have no choice since we can't modify the PCE enclave.
     // report_data = SHA256(crypto_suite||rsa_pub_key)||0-padding
     do {
         sgx_status = sgx_sha256_init(&sha_handle);
@@ -324,6 +325,7 @@ sgx_status_t ide_get_pce_encrypt_key(
         goto ret_point;
     }
 
+    // Raoul: (4) Creating the report is required, and needs to happen inside _a_ enclave
     sgx_status = sgx_create_report(p_pce_target_info, &report_data, p_ide_report);
     if (SGX_SUCCESS != sgx_status && SGX_ERROR_OUT_OF_MEMORY != sgx_status) {
         sgx_status = SGX_ERROR_UNEXPECTED;

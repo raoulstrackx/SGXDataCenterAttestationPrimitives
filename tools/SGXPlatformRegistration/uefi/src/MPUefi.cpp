@@ -102,7 +102,7 @@ MpResult MPUefi::getRequestType(MpRequestType& type) {
 #ifdef MP_VERIFY_UEFI_STRUCT_READ
         if (varDataSize != sizeof(requestUefi->version) + sizeof(requestUefi->size) + requestUefi->size) {
             uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRequestType: SgxRegistrationServerRequest UEFI size is invalid.\n");
-            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRequestType: actual size: %d, expected size: %d\n", varDataSize,
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRequestType: actual size: %zu, expected size: %zu\n", varDataSize,
                 sizeof(requestUefi->version) + sizeof(requestUefi->size) + requestUefi->size);
             res = MP_UEFI_INTERNAL_ERROR;
             break;
@@ -164,7 +164,7 @@ MpResult MPUefi::getRequest(uint8_t *request, uint16_t &requestSize) {
 #ifdef MP_VERIFY_UEFI_STRUCT_READ
         if (varDataSize != sizeof(requestUefi->version) + sizeof(requestUefi->size) + requestUefi->size) {
             uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRequest: SgxRegistrationServerRequest UEFI size is invalid.\n");
-            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRequest: actual size: %d, expected size: %d\n", varDataSize,
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRequest: actual size: %zu, expected size: %zu\n", varDataSize,
                 sizeof(requestUefi->version) + sizeof(requestUefi->size) + requestUefi->size);
             res = MP_UEFI_INTERNAL_ERROR;
             break;
@@ -385,7 +385,7 @@ MpResult MPUefi::setServerResponse(const uint8_t *response, const uint16_t &size
         responseUefi->version = MP_BIOS_UEFI_VARIABLE_VERSION_1;
         responseUefi->size = size;
 
-        // copy cets to uefi structure
+        // copy certs to uefi structure
         memcpy(&(responseUefi->header), response, size);
 
 #if MP_VERIFY_INTERNAL_DATA_STRUCT_WRITE == 1
@@ -469,7 +469,7 @@ MpResult MPUefi::getKeyBlobs(uint8_t *blobs, uint16_t &blobsSize) {
         // uefi structure size check
         if (varDataSize != sizeof(packageInfoUefi->version) + sizeof(packageInfoUefi->size) + packageInfoUefi->size) {
             uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getKeyBlobs: SgxRegistrationPackageInfo UEFI size is invalid.\n");
-            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getKeyBlobs: actual size: %d, expected size: %d\n", varDataSize,
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getKeyBlobs: actual size: %zu, expected size: %zu\n", varDataSize,
                 sizeof(packageInfoUefi->version) + sizeof(packageInfoUefi->size) + packageInfoUefi->size);
             res = MP_UEFI_INTERNAL_ERROR;
             break;
@@ -551,7 +551,7 @@ MpResult MPUefi::getRegistrationStatus(MpRegistrationStatus& status) {
         statusUefi = (RegistrationStatusUEFI*)m_uefi->readUEFIVar(UEFI_VAR_STATUS, varDataSize);
         if (statusUefi == 0 || varDataSize != sizeof(RegistrationStatusUEFI)) {
             uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationStatus: SgxRegistrationStatus UEFI variable was not found or size not as expected.\n");
-            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationStatus: SgxRegistrationStatus acutal size: %d, expected size: %d\n", varDataSize, sizeof(RegistrationStatusUEFI));
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationStatus: SgxRegistrationStatus acutal size: %zu, expected size: %zu\n", varDataSize, sizeof(RegistrationStatusUEFI));
             res = MP_UEFI_INTERNAL_ERROR;
             break;
         }
@@ -569,7 +569,7 @@ MpResult MPUefi::getRegistrationStatus(MpRegistrationStatus& status) {
         // uefi structure size check
         if (statusUefi->size != sizeof(statusUefi->status) + sizeof(statusUefi->errorCode)) {
             uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationStatus: SgxRegistrationStatus structure size not as expected.\n");
-            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationStatus: statusUefi->size: %d, sizeof(statusUefi->status): %d, sizeof(statusUefi->errorCode): %d\n",
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationStatus: statusUefi->size: %d, sizeof(statusUefi->status): %zu, sizeof(statusUefi->errorCode): %zu\n",
                 statusUefi->size, sizeof(statusUefi->status), sizeof(statusUefi->errorCode));
             res = MP_UEFI_INTERNAL_ERROR;
             break;
@@ -617,6 +617,11 @@ MpResult MPUefi::setRegistrationStatus(const MpRegistrationStatus& status) {
         // write registration status to uefi
         int numOfBytes = m_uefi->writeUEFIVar(UEFI_VAR_STATUS, (const uint8_t*)(&statusUefi), sizeof(statusUefi), false);
         if (numOfBytes != sizeof(statusUefi)) {
+            if(numOfBytes == -1) {
+                uefi_log_message(MP_REG_LOG_LEVEL_INFO, "Warning: fail to write regsitration status uefi variable, maybe it is in read-only mode.\n");
+                res = MP_INSUFFICIENT_PRIVILEGES;
+                break;
+            }
             uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "setRegistrationStatus: failed to write uefi variable.\n");
             res = MP_UEFI_INTERNAL_ERROR;
             break;
@@ -656,7 +661,7 @@ MpResult MPUefi::getRegistrationServerInfo(uint16_t &flags, string &serverAddres
 #ifdef MP_VERIFY_UEFI_STRUCT_READ
         if (varDataSize != configurationUefi->size + sizeof(configurationUefi->version) + sizeof(configurationUefi->size)) {
             uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationServerInfo: RegistrationServerInfo UEFI size is invalid.\n");
-            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationServerInfo: actual size: %d, expected size: %d\n", varDataSize,
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "getRegistrationServerInfo: actual size: %zu, expected size: %zu\n", varDataSize,
                 configurationUefi->size + sizeof(configurationUefi->version) + sizeof(configurationUefi->size));
             res = MP_UEFI_INTERNAL_ERROR;
             break;
@@ -769,7 +774,7 @@ MpResult MPUefi::setRegistrationServerInfo(const uint16_t &flags, const string &
         }
 
         if (MAX_URL_SIZE < serverAddress.length()) {
-            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "setRegistrationServerInfo: URL length is too long. \n", res);
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "setRegistrationServerInfo: URL length is too long. \n");
             res = MP_INVALID_PARAMETER;
             break;
         }
@@ -897,10 +902,10 @@ MpResult MPUefi::setRegistrationServerInfo(const uint16_t &flags, const string &
         int numOfBytes = m_uefi->writeUEFIVar(UEFI_VAR_CONFIGURATION, (const uint8_t*)configurationUefi, sizeof(ConfigurationUEFI) + serverIdSize - 
             sizeof(configurationUefi->headerId), false);
         if (numOfBytes != (int)(sizeof(ConfigurationUEFI) + serverIdSize - sizeof(configurationUefi->headerId))) {
-	    if(numOfBytes == -1) {
+            if(numOfBytes == -1) {
                 uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "setRegistrationServerInfo: Can't write Registration Configuration UEFI variable, please check whether the SGX has been disabled.\n");
                 res = MP_INSUFFICIENT_PRIVILEGES;
-	    } 
+            } 
             else {
                 uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "setRegistrationServerInfo: failed to write uefi variable.\n");
                 res = MP_UNEXPECTED_ERROR;

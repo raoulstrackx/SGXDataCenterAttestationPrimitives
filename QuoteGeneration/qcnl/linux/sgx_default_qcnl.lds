@@ -16,6 +16,11 @@ global:
     sgx_qcnl_free_root_ca_crl;
     sgx_qcnl_get_api_version;
     sgx_qcnl_set_logging_callback;
+    sgx_qcnl_clear_cache;
+    sgx_qcnl_global_init;
+    sgx_qcnl_global_cleanup;
+    tee_qcnl_get_default_platform_policy;
+    tee_qcnl_free_platform_policy;
 
 local:
     *;

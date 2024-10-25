@@ -1,9 +1,14 @@
 [package]
-name = "sgx-dcap-quoteverify-rs"
-version = "0.1.0"
-edition = "2018"
+name = "intel-tee-quote-verification-rs"
+version = "0.3.0"
+edition = "2021"
+license = "BSD-3-Clause"
+description = "Intel(R) TEE Quote Verification Rust Library"
+documentation = "https://intel.github.io/SGXDataCenterAttestationPrimitives/docs/rust-qvl-doc/intel_tee_quote_verification_rs"
+readme = "README.md"
+homepage = "https://github.com/intel/SGXDataCenterAttestationPrimitives"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sgx-dcap-quoteverify-sys = { version = "0.1.0", path = "../sgx-dcap-quoteverify-sys" }
+intel-tee-quote-verification-sys = "0.2.1"

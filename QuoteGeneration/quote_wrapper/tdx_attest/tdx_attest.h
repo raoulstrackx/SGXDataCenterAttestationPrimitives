@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2011-2022 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,6 +54,7 @@ typedef enum _tdx_attest_error_t {
     TDX_ATTEST_ERROR_BUSY = 0x0009,                     ///< The device driver return busy
     TDX_ATTEST_ERROR_DEVICE_FAILURE = 0x000a,           ///< Failed to acess tdx attest device
     TDX_ATTEST_ERROR_INVALID_RTMR_INDEX = 0x000b,       ///< Only supported RTMR index is 2 and 3
+    TDX_ATTEST_ERROR_UNSUPPORTED_ATT_KEY_ID = 0x000c,   ///< The platform Quoting infrastructure does not support any of the keys described in att_key_id_list 
     TDX_ATTEST_ERROR_MAX
 } tdx_attest_error_t;
 
@@ -62,7 +63,7 @@ typedef enum _tdx_attest_error_t {
 #pragma pack(push, 1)
 
 #define TDX_UUID_SIZE 16
-typedef struct tdx_uuid_t
+typedef struct _tdx_uuid_t
 {
     uint8_t d[TDX_UUID_SIZE];
 } tdx_uuid_t;
@@ -100,6 +101,7 @@ typedef struct _tdx_rtmr_event_t {
 extern "C" {
 #endif
 
+#ifndef SERVTD_ATTEST
 /**
  * @brief Request a Quote of the calling TD.
  *
@@ -123,8 +125,7 @@ extern "C" {
  *
  * @param p_tdx_report_data [in] Pointer to data that the caller/TD wants to
  *                               cryptographically bind to the Quote,
- *                               typically a hash. May be NULL, in which case,
- *                               all zeros will be used for the Report data.
+ *                               typically a hash. Cannot be NULL. 
  * @param att_key_id_list [in] List (array) of the attestation key IDs supported
  *                             by the Quote verifier. The function compares the
  *                             key IDs in att_key_id_list to the key IDs that
@@ -149,6 +150,7 @@ extern "C" {
  * @return TDX_ATTEST_SUCCESS: Successfully generated the Quote.
  * @return TDX_ATTEST_ERROR_UNEXPECTED: An unexpected internal error occurred.
  * @return TDX_ATTEST_ERROR_INVALID_PARAMETER: The parameter is incorrect
+ * @return TDX_ATTEST_ERROR_DEVICE_FAILURE: Failed to acess tdx attest device.
  * @return TDX_ATTEST_ERROR_REPORT_FAILURE: Failed to get TD report.
  * @return TDX_ATTEST_ERROR_VSOCK_FAILURE: Failed read/write in vsock mode
  * @return TDX_ATTEST_ERROR_QUOTE_FAILURE: Failed to get quote from QGS
@@ -185,12 +187,12 @@ tdx_attest_error_t tdx_att_free_quote(
  *
  * @param p_tdx_report_data [in] Pointer to data that the caller/TD wants to
  *                               cryptographically bind to the Quote, typically
- *                               a hash. May be NULL, in which case, all zeros
- *                               will be used for the Report data.
+ *                               a hash. Cannot be NULL. 
  * @param p_tdx_report [out] Pointer to the buffer that will contain the
  *                           generated TDX Report. Must not be NULL.
  * @return TDX_ATTEST_SUCCESS: Successfully generated the Report.
  * @return TDX_ATTEST_ERROR_INVALID_PARAMETER: p_tdx_report == NULL
+ * @return TDX_ATTEST_ERROR_DEVICE_FAILURE: Failed to acess tdx attest device.
  * @return TDX_ATTEST_ERROR_REPORT_FAILURE: Failed to get TD report.
  */
 tdx_attest_error_t tdx_att_get_report(
@@ -217,6 +219,7 @@ tdx_attest_error_t tdx_att_get_report(
  * @return TDX_ATTEST_SUCCESS: Successfully extended the RTMR.
  * @return TDX_ATTEST_ERROR_INVALID_PARAMETER: p_rtmr_event == NULL
  * @return TDX_ATTEST_ERROR_UNEXPECTED: An unexpected internal error occurred.
+ * @return TDX_ATTEST_ERROR_DEVICE_FAILURE: Failed to acess tdx attest device.
  * @return TDX_ATTEST_ERROR_EXTEND_FAILURE: Failed to extend data.
  * @return TDX_ATTEST_ERROR_NOT_SUPPORTED: p_rtmr_event->event_data_size != 0
  */
@@ -247,6 +250,15 @@ tdx_attest_error_t tdx_att_extend(
 tdx_attest_error_t tdx_att_get_supported_att_key_ids(
     tdx_uuid_t *p_att_key_id_list,
     uint32_t *p_list_size);
+
+#else
+__attribute__ ((visibility("default"))) tdx_attest_error_t tdx_att_get_quote_by_report (
+               const void *p_tdx_report,
+               uint32_t tdx_report_size,
+               void *p_quote,
+               uint32_t *p_quote_size);
+#endif
+
 #if defined(__cplusplus)
 }
 #endif

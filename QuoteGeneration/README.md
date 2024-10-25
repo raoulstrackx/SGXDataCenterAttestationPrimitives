@@ -8,6 +8,8 @@ For Windows* OS
    * Windows* Server 2016 (Long-Term Servicing Channel)
    * Windows* Server 2019 (Long-Term Servicing Channel)
 - Ensure that you have the following required hardware:
+  * 3rd or 4th Generation Intel(R) Xeon(R) Scalable Processor
+  * Intel(R) Xeon(R) D Processors from the 17xx and 27xx series
   * 8th Generation Intel(R) Core(TM) Processor or newer with **Flexible Launch Control** support*
   * Intel(R) Atom(TM) Processor with **Flexible Launch Control** support*
 - Configure the system with the **SGX hardware enabled** option.
@@ -37,7 +39,7 @@ For Windows* OS
 **NOTE**:`sgx_dcap_dev.inf` is for Windows* Server 2016 LTSC and `sgx_dcap.inf` is for Windows* Server 2019 LTSC.
 
 ## How to install
-   Refer to the *"Installation Instructions"* section in the [Intel(R) Software Guard Extensions: Data Center Attestation Primitives Installation Guide For Windows* OS](https://download.01.org/intel-sgx/sgx-dcap/1.14/windows/docs/Intel_SGX_DCAP_Windows_SW_Installation_Guide.pdf) to install the right packages on your platform.
+   Refer to the *"Installation Instructions"* section in the [Intel(R) Software Guard Extensions: Data Center Attestation Primitives Installation Guide For Windows* OS](https://download.01.org/intel-sgx/sgx-dcap/1.22/windows/docs/Intel_SGX_DCAP_Windows_SW_Installation_Guide.pdf) to install the right packages on your platform.
 
 
 For Linux* OS
@@ -50,6 +52,8 @@ For Linux* OS
   * Red Hat Enterprise Linux Server release 8.5 64bits
   * CentOS Stream 8 64bits
 - Ensure that you have the following required hardware:
+  * 3rd or 4th Generation Intel(R) Xeon(R) Scalable Processor
+  * Intel(R) Xeon(R) D Processors from the 17xx and 27xx series
   * 8th Generation Intel(R) Core(TM) Processor or newer with **Flexible Launch Control** support*
   * Intel(R) Atom(TM) Processor with **Flexible Launch Control** support*
 - Configure the system with the **SGX hardware enabled** option.
@@ -60,7 +64,7 @@ For Linux* OS
   ```
   * On Ubuntu 20.04
   ```
-    $ sudo apt-get install build-essential wget python-is-python3 debhelper zip libcurl4-openssl-dev pkgconf libboost-dev libboost-system-dev protobuf-c-compiler libprotobuf-c-dev protobuf-compiler
+    $ sudo apt-get install build-essential wget python-is-python3 debhelper zip libcurl4-openssl-dev pkgconf libboost-dev libboost-system-dev libboost-thread-dev protobuf-c-compiler libprotobuf-c-dev protobuf-compiler
   ```
   * On Red Hat Enterprise Linux 8.5
   ```
@@ -116,7 +120,7 @@ A `README.md` is provided in the Intel(R) SGX driver package for Intel(R) SGX DC
   ```
     $ make deb_pkg
   ```
-  You can find the generated installers located under `linux/installer/deb/`.
+  You can find the generated installers located under `installer/linux/deb/`.
   **Note**: On Ubuntu 18.04 and Ubuntu 20.04, the above command also generates another debug symbol package with extension name of `.ddeb` for debug purpose.
   **Note**: The above command builds the installers with default configuration firstly and then generates the target installers. To build the installers without optimization and with full debug information kept in the libraries, enter the following command:
   ```
@@ -126,7 +130,7 @@ A `README.md` is provided in the Intel(R) SGX driver package for Intel(R) SGX DC
   ```
     $ make rpm_pkg
   ```
-  You can find the generated installers located under `linux/installer/rpm/`.
+  You can find the generated installers located under `installer/linux/rpm/`.
   **Note**: The above command builds the installers with default configuration firstly and then generates the target installers. To build the installers without optimization and with full debug information kept in the libraries, enter the following command:
   ```
     $ make rpm_pkg DEBUG=1
@@ -193,4 +197,4 @@ A `README.md` is provided in the Intel(R) SGX driver package for Intel(R) SGX DC
     $ sudo rpm -ivh libsgx-dcap-default-qpl-debuginfo*.rpm
   ```
 ## TDX Attestation Support
-- From version 1.14, TDX attestation feature is added into DCAP. Corresponding packages will be built along with the DCAP Quote Generation Library adn DCAP Quote Verification Library. Currently, TDX attestation support has been verified on Red Hat Enterprise Linux 8.5 and CentOS Stream 8 only.
+- From version 1.14, TDX attestation feature is added into DCAP. Corresponding packages will be built along with the DCAP Quote Generation Library and DCAP Quote Verification Library. Currently, TDX attestation support has been verified on Red Hat Enterprise Linux 8.5 and CentOS Stream 8 only.

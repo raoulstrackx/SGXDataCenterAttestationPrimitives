@@ -156,7 +156,10 @@ static void __attribute__((constructor)) _sgx_dcap_ql_init()
 
 static void close_sofile(void)
 {
-    se_mutex_lock(&g_dlopen_mutex);
+    int rc = se_mutex_lock(&g_dlopen_mutex);
+    if (rc == 0) {
+        SE_TRACE(SE_TRACE_ERROR, "Failed to lock mutex\n");
+    }
     if (g_dlopen_handle != NULL) {
         dlclose(g_dlopen_handle);
         g_dlopen_handle = NULL;
@@ -173,7 +176,11 @@ static void __attribute__((destructor)) _sgx_dcap_ql_fini(void)
 static func_sgx_init_quote_ex_t init_quote_ex_function(void)
 {
     if (g_init_quote_ex == NULL) {
-        se_mutex_lock(&g_dlopen_mutex);
+        int rc = se_mutex_lock(&g_dlopen_mutex);
+        if (rc == 0) {
+            SE_TRACE(SE_TRACE_ERROR, "Failed to lock mutex\n");
+            return NULL;
+        }
         if (g_init_quote_ex != NULL)
         {
             se_mutex_unlock(&g_dlopen_mutex);
@@ -198,7 +205,11 @@ static func_sgx_init_quote_ex_t init_quote_ex_function(void)
 static func_sgx_get_quote_size_ex_t get_quote_size_ex_function(void)
 {
     if (g_get_quote_size_ex == NULL) {
-        se_mutex_lock(&g_dlopen_mutex);
+        int rc = se_mutex_lock(&g_dlopen_mutex);
+        if (rc == 0) {
+            SE_TRACE(SE_TRACE_ERROR, "Failed to lock mutex\n");
+            return NULL;
+        }
         if (g_get_quote_size_ex != NULL)
         {
             se_mutex_unlock(&g_dlopen_mutex);
@@ -223,7 +234,11 @@ static func_sgx_get_quote_size_ex_t get_quote_size_ex_function(void)
 static func_sgx_get_quote_ex_t get_quote_ex_function(void)
 {
     if (g_get_quote_ex == NULL) {
-        se_mutex_lock(&g_dlopen_mutex);
+        int rc = se_mutex_lock(&g_dlopen_mutex);
+        if (rc == 0) {
+            SE_TRACE(SE_TRACE_ERROR, "Failed to lock mutex\n");
+            return NULL;
+        }
         if (g_get_quote_ex != NULL)
         {
             se_mutex_unlock(&g_dlopen_mutex);
@@ -322,7 +337,7 @@ extern "C" quote3_error_t sgx_qe_get_target_info(sgx_target_info_t *p_qe_target_
     if(false == g_out_of_proc)
     {
         // Call Init Quote
-        // Generates a new ECDSA Attestation key of one does not exist.
+        // Generates a new ECDSA Attestation key if it does not exist.
         // Returns the qe_target_info so that the app enclave can generate a report.
         // Certifies the ECDSA Attestation key if a new key is generated.
         // Stores the ECDSA key in a file for later use
@@ -332,7 +347,7 @@ extern "C" quote3_error_t sgx_qe_get_target_info(sgx_target_info_t *p_qe_target_
         // 4. Returns the QE target info
         // 5. Returns the ECDSA_ID in pub_key_id_out
         refresh_att_key = false;  ///@todo: Consider adding the ability to refresh the key with a new KEY_ID for key wearout.
-        SE_TRACE(SE_TRACE_DEBUG,"Call sgx_ql_init_quote - first to get pub_key_id_size.\n");
+        SE_TRACE(SE_TRACE_NOTICE,"Call sgx_ql_init_quote - first to get pub_key_id_size.\n");
         quote_ret = sgx_ql_init_quote(NULL,
                                       NULL,
                                       refresh_att_key,
@@ -342,14 +357,14 @@ extern "C" quote3_error_t sgx_qe_get_target_info(sgx_target_info_t *p_qe_target_
             SE_TRACE(SE_TRACE_ERROR,"Error in sgx_ql_init_quote. 0x%04x\n", quote_ret);
             goto CLEANUP;
         }
-        SE_TRACE(SE_TRACE_DEBUG, "Required pub key id size is: %ld\n", pub_key_id_size_out);
+        SE_TRACE(SE_TRACE_NOTICE, "Required pub key id size is: %ld\n", pub_key_id_size_out);
         if (pub_key_id_size_out != sizeof(ref_sha256_hash_t)) {
             quote_ret = SGX_QL_ERROR_UNEXPECTED;
             goto CLEANUP;
         }
 
         pub_key_id_size_out = sizeof(ref_sha256_hash_t);
-        SE_TRACE(SE_TRACE_DEBUG, "Call sgx_ql_init_quote - second with allocated pub_key_id_buffer.\n");
+        SE_TRACE(SE_TRACE_NOTICE, "Call sgx_ql_init_quote - second with allocated pub_key_id_buffer.\n");
         quote_ret = sgx_ql_init_quote(NULL,
                                       p_qe_target_info,
                                       refresh_att_key,
@@ -370,7 +385,7 @@ extern "C" quote3_error_t sgx_qe_get_target_info(sgx_target_info_t *p_qe_target_
         func_sgx_init_quote_ex_t func = init_quote_ex_function();
         if (NULL == func) {
             SE_TRACE(SE_TRACE_ERROR,"Error in get symbol %s.\n", SGX_INIT_QUOTE_EX);
-            quote_ret = SGX_QL_ERROR_UNEXPECTED;
+            quote_ret = SGX_QL_SERVICE_UNAVAILABLE;
             goto CLEANUP;
         }
         quote_ret= sgx_status_to_quote3_error(func(&g_att_keyid,
@@ -381,14 +396,14 @@ extern "C" quote3_error_t sgx_qe_get_target_info(sgx_target_info_t *p_qe_target_
             SE_TRACE(SE_TRACE_ERROR,"Error in %s. 0x%04x\n", SGX_INIT_QUOTE_EX, quote_ret);
             goto CLEANUP;
         }
-        SE_TRACE(SE_TRACE_DEBUG, "Required pub key id size is: %ld\n", pub_key_id_size_out);
+        SE_TRACE(SE_TRACE_NOTICE, "Required pub key id size is: %ld\n", pub_key_id_size_out);
         if (pub_key_id_size_out != sizeof(ref_sha256_hash_t)) {
             quote_ret = SGX_QL_ERROR_UNEXPECTED;
             goto CLEANUP;
         }
 
         pub_key_id_size_out = sizeof(ref_sha256_hash_t);
-        SE_TRACE(SE_TRACE_DEBUG, "Call sgx_init_quote_ex - second with allocated pub_key_id_buffer.\n");
+        SE_TRACE(SE_TRACE_NOTICE, "Call sgx_init_quote_ex - second with allocated pub_key_id_buffer.\n");
         quote_ret = sgx_status_to_quote3_error(func(&g_att_keyid,
                                                p_qe_target_info,
                                                &pub_key_id_size_out,
@@ -443,7 +458,7 @@ extern "C" quote3_error_t sgx_qe_get_quote_size(uint32_t *p_quote_size)
     }
 
     // Get the Quote size and allocate the memory
-    SE_TRACE(SE_TRACE_DEBUG, "Call sgx_ql_get_quote_size.\n");
+    SE_TRACE(SE_TRACE_NOTICE, "Call sgx_ql_get_quote_size.\n");
     if(false == g_out_of_proc)
     {
         quote_ret = sgx_ql_get_quote_size(NULL,
@@ -452,7 +467,7 @@ extern "C" quote3_error_t sgx_qe_get_quote_size(uint32_t *p_quote_size)
             SE_TRACE(SE_TRACE_ERROR, "Error in sgx_ql_get_quote_size. 0x%04x\n", quote_ret);
             goto CLEANUP;
         }
-        SE_TRACE(SE_TRACE_DEBUG, "quote_size = %d\n",*p_quote_size);
+        SE_TRACE(SE_TRACE_NOTICE, "quote_size = %d\n",*p_quote_size);
     }
 #ifndef _MSC_VER
     else
@@ -460,7 +475,7 @@ extern "C" quote3_error_t sgx_qe_get_quote_size(uint32_t *p_quote_size)
         func_sgx_get_quote_size_ex_t func = get_quote_size_ex_function();
         if (NULL == func) {
             SE_TRACE(SE_TRACE_ERROR,"Error in get symbol %s.\n", SGX_GET_QUOTE_SIZE_EX);
-            quote_ret = SGX_QL_ERROR_UNEXPECTED;
+            quote_ret = SGX_QL_SERVICE_UNAVAILABLE;
             goto CLEANUP;
         }
         quote_ret = sgx_status_to_quote3_error(func(&g_att_keyid, p_quote_size));
@@ -468,7 +483,7 @@ extern "C" quote3_error_t sgx_qe_get_quote_size(uint32_t *p_quote_size)
             SE_TRACE(SE_TRACE_ERROR, "Error in %s. 0x%04x\n", SGX_GET_QUOTE_SIZE_EX, quote_ret);
             goto CLEANUP;
         }
-        SE_TRACE(SE_TRACE_DEBUG, "quote_size = %d\n",*p_quote_size);
+        SE_TRACE(SE_TRACE_NOTICE, "quote_size = %d\n",*p_quote_size);
     }
 #endif
 
@@ -536,7 +551,7 @@ extern "C" quote3_error_t sgx_qe_get_quote(const sgx_report_t *p_app_report,
     // 1. Input the app enclave's report
     // 2. Input Size of this quote and a pointer to the buffer of that size to contain the quote.
     // 3. Returns the quote
-    SE_TRACE(SE_TRACE_DEBUG, "sgx_ql_get_quote\n.");
+    SE_TRACE(SE_TRACE_NOTICE, "sgx_ql_get_quote\n.");
 
     if(false == g_out_of_proc)
     {
@@ -556,7 +571,7 @@ extern "C" quote3_error_t sgx_qe_get_quote(const sgx_report_t *p_app_report,
         func_sgx_get_quote_ex_t func = get_quote_ex_function();
         if (NULL == func) {
             SE_TRACE(SE_TRACE_ERROR,"Error in get symbol %s.\n", SGX_GET_QUOTE_EX);
-            quote_ret = SGX_QL_ERROR_UNEXPECTED;
+            quote_ret = SGX_QL_SERVICE_UNAVAILABLE;
             goto CLEANUP;
         }
         quote_ret = sgx_status_to_quote3_error(func(p_app_report, &g_att_keyid, NULL, p_quote, quote_size));
@@ -651,5 +666,29 @@ quote3_error_t sgx_ql_set_path(sgx_ql_path_type_t path_type, const char *p_path)
     }
     return(ret);
 }
-#endif
 
+quote3_error_t sgx_ql_set_trace_callback(sgx_ql_logging_callback_t logger, sgx_ql_log_level_t loglevel)
+{
+    switch (loglevel)
+    {
+    case SGX_QL_LOG_ERROR:
+        sgx_trace_loglevel = SE_TRACE_ERROR;
+        break;
+    case SGX_QL_LOG_INFO:
+        sgx_trace_loglevel = SE_TRACE_WARNING;
+        break;
+    case SGX_QL_LOG_DEBUG:
+        sgx_trace_loglevel = SE_TRACE_NOTICE;
+        break;
+    case SGX_QL_LOG_TRACE:
+        sgx_trace_loglevel = SE_TRACE_DEBUG;
+        break;
+    default:
+        sgx_trace_loglevel = SE_TRACE_NONE;
+        break;
+    }
+    sgx_trace_logger_callback = (sgx_logging_callback_t)logger;
+    return SGX_QL_SUCCESS;
+}
+
+#endif

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+# Copyright (C) 2011-2022 Intel Corporation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -34,16 +34,16 @@ ARG1=${1:-build}
 top_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 sgxssl_dir=$top_dir/sgxssl
 openssl_out_dir=$sgxssl_dir/openssl_source
-openssl_ver_name=openssl-1.1.1o
-sgxssl_github_archive=https://github.com/01org/intel-sgx-ssl/archive
-sgxssl_file_name=lin_2.17_1.1.1o
+openssl_ver_name=openssl-3.0.14
+sgxssl_github_archive=https://github.com/intel/intel-sgx-ssl/archive
+sgxssl_file_name=3.0_Rev4
 build_script=$sgxssl_dir/Linux/build_openssl.sh
 server_url_path=https://www.openssl.org/source/
 full_openssl_url=$server_url_path/$openssl_ver_name.tar.gz
-full_openssl_url_old=$server_url_path/old/1.1.1/$openssl_ver_name.tar.gz
+full_openssl_url_old=$server_url_path/old/3.0/$openssl_ver_name.tar.gz
 
-sgxssl_chksum=f0ed7bd37b45fd2350ec835a9c56b5590554e13b94471a38d3379054448a6d4b
-openssl_chksum=9384a2b0570dd80358841464677115df785edb941c71211f75076d72fe6b438f
+sgxssl_chksum=3ae56df48a56f58fce8d0472ea82cc4380e30442b49b931c027fda9e637cb3fa
+openssl_chksum=eeca035d4dd4e84fc25846d952da6297484afa0650a6f84c682e39df3a4123ca
 rm -f check_sum_sgxssl.txt check_sum_openssl.txt
 if [ ! -f $build_script ]; then
 	wget $sgxssl_github_archive/$sgxssl_file_name.zip -P $sgxssl_dir/ || exit 1
@@ -58,6 +58,20 @@ if [ ! -f $build_script ]; then
 	mv $sgxssl_dir/intel-sgx-ssl-$sgxssl_file_name/* $sgxssl_dir/ || exit 1
 	rm $sgxssl_dir/$sgxssl_file_name.zip || exit 1
 	rm -rf $sgxssl_dir/intel-sgx-ssl-$sgxssl_file_name || exit 1
+fi
+if [[ "$*" == *SERVTD_ATTEST* ]];then
+	if [ -f $build_script ]; then
+		sed -i 's/no-idea/no-idea\ no-threads/' $build_script
+	fi
+	if [ -f $bypass_fun_header ]; then
+		sed -i '/sgxssl_gmtime_r$/a #define\ gmtime\ sgxssl_gmtime' $bypass_fun_header
+		sed -i 's/D),\ 0/D),\ 3/' Makefile    #for test project fail sigle thread
+		sed -i 's/__thread//' $tls_time_source_file
+	fi
+
+	if [ -f $test_makefile ]; then
+		sed -i 's/D),\ 0/D),\ 3/' $test_makefile
+	fi
 fi
 
 if [ ! -f $openssl_out_dir/$openssl_ver_name.tar.gz ]; then
@@ -77,7 +91,11 @@ if [ "$1" = "nobuild" ]; then
 fi
 
 pushd $sgxssl_dir/Linux/
+if [[ "$*" == *SERVTD_ATTEST* ]];then
+make clean sgxssl_no_mitigation NO_THREADS=1 LINUX_SGX_BUILD=2 SERVTD_ATTEST=1
+else
 make clean sgxssl_no_mitigation 
+fi
 popd
 
 

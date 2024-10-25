@@ -33,9 +33,10 @@
 SGX_DEBUG ?= 0
 
 SGX_SDK ?= /opt/intel/sgxsdk
-SGX_MODE ?= HW
 SGX_ARCH ?= x64
-OUT_OF_PROC ?= 0
+SGX_QPL_LOGGING ?= 1
+SGX_TRACE_LOGGING ?= 0
+
 
 
 SGX_COMMON_CFLAGS := -m64
@@ -53,10 +54,9 @@ endif
 
 DCAP_Library_Name := sgx_dcap_ql
 Urts_Library_Name := sgx_urts
-Quote_ex_Library_Name := sgx_quote_ex
 
 App_Cpp_Files :=  App/App.cpp
-App_Include_Paths := -I$(SGX_SDK)/include -I../../QuoteGeneration/quote_wrapper/common/inc
+App_Include_Paths := -I$(SGX_SDK)/include
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -72,12 +72,26 @@ endif
 
 App_Cpp_Flags := $(App_C_Flags) -std=c++11
 App_Link_Flags := $(SGX_COMMON_CFLAGS) -l$(DCAP_Library_Name) -l$(Urts_Library_Name) -ldl -lpthread
-ifeq ($(OUT_OF_PROC),1)
-	App_Link_Flags += -l$(Quote_ex_Library_Name)
+#
+# Check if SGX_QPL_LOGGING is either 0 , 1 or 2
+ifeq ($(filter $(SGX_QPL_LOGGING),0 1 2),)
+    $(error SGX_QPL_LOGGING must be set to either 0 , 1 or 2.\
+      0 means disable QPL logging.\
+      1 means QPL logging error level.\
+      2 means QPL logging info level.)
 endif
 
+ifneq ($(SGX_QPL_LOGGING), 0)
+App_Link_Flags += -ldcap_quoteprov
+endif
+App_Cpp_Flags += -DSGX_QPL_LOGGING=$(SGX_QPL_LOGGING)
+
+ifneq ($(SGX_TRACE_LOGGING), 0)
+App_Cpp_Flags += -DSGX_TRACE_LOGGING=$(SGX_TRACE_LOGGING)
+endif
 
 App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
+
 
 App_Name := app
 
@@ -121,6 +135,7 @@ ENCLAVE_LIBRARY_PATH := Enclave/
 Enclave_Name := enclave.so
 Signed_Enclave_Name := enclave.signed.so
 Enclave_Config_File := Enclave/Enclave.config.xml
+Enclave_Test_Key := Enclave/Enclave_private_sample.pem
 
 ifeq ($(SGX_DEBUG), 1)
         Build_Mode = HW_DEBUG
@@ -144,7 +159,7 @@ endif
 run: all
 ifneq ($(Build_Mode), HW_RELEASE)
 	@$(CURDIR)/$(App_Name)
-	@echo "RUN  =>  $(App_Name) [$(SGX_MODE)|$(SGX_ARCH), OK]"
+	@echo "RUN  =>  $(App_Name) [$(SGX_ARCH), OK]"
 endif
 
 
@@ -191,7 +206,12 @@ $(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects)
 	@echo "LINK =>  $@"
 
 $(Signed_Enclave_Name): $(Enclave_Name)
-	@$(SGX_ENCLAVE_SIGNER) sign -key Enclave/Enclave_private_sample.pem -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
+ifeq ($(wildcard $(Enclave_Test_Key)),)
+	@echo "There is no enclave test key<Enclave_private_sample.pem>."
+	@echo "The project will generate a key<Enclave_private_sample.pem> for test."
+	@openssl genrsa -out $(Enclave_Test_Key) -3 3072
+endif
+	@$(SGX_ENCLAVE_SIGNER) sign -key $(Enclave_Test_Key) -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
 	@rm -f $(Enclave_Name)
 	@echo "SIGN =>  $@"
 

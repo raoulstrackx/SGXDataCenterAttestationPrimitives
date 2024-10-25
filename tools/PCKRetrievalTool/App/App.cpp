@@ -74,7 +74,8 @@ void PrintHelp() {
     printf( " -user_token token_string             - user token to access the cache server \n");
     printf( " -proxy_type proxy_type               - proxy setting when access the cache server \n");
     printf( " -proxy_url  proxy_server_address     - proxy server's address \n");
-    printf( " -use_secure_cert [true | false]      - accept secure/insecure https cert, default value is true \n");
+    printf( " -use_secure_cert {true | false}      - accept secure/insecure https cert, default value is true \n");
+    printf( " -tcb_update_type {standard, early, all}  - update type for tcb material, default value is standard \n");
     printf( " -platform_id \"platform_id_string\"  - in this mode, enclave is not needed to load, but platform id need to input\n");
     printf( " -?                                   - show command help\n");
     printf( " -h                                   - show command help\n");
@@ -134,7 +135,11 @@ std::string user_token_string = "";
 std::string use_secure_cert_string = "";
 std::string output_filename = "";
 std::string platform_id_string = "";
+std::string tcb_update_type_string = "";
 bool non_enclave_mode = false;
+// Use secure HTTPS certificate or not
+bool g_use_secure_cert = true;
+
 
 int parse_arg(int argc, const char *argv[])
 {
@@ -226,7 +231,7 @@ int parse_arg(int argc, const char *argv[])
         else if (strncmp(argv[i], "-platform_id", 12) == 0) {
             non_enclave_mode = true;
             if (i == argc - 1 || argv[i + 1][0] == '-') {
-                fprintf(stdout, "Please input the platform ID, and the platform ID's length should not more than 260 bytes: \n");
+                fprintf(stdout, "Please input the platform ID, and the platform ID's length should not be more than 260 bytes: \n");
                 char platform_id[MAX_PATH] = {0};
                 if (NULL == fgets(platform_id, MAX_PATH, stdin)) {
                     fprintf(stderr, "No platform id is provided for -platform_id\n");
@@ -234,7 +239,7 @@ int parse_arg(int argc, const char *argv[])
                 }
                 platform_id_string = platform_id;
                 if (platform_id_string.length() > MAX_PATH) {
-                    fprintf(stderr, "Error: the platform ID's length should not more than 260 bytes.\n");
+                    fprintf(stderr, "Error: the platform ID's length should not be more than 260 bytes.\n");
                     return -1;
                 }
                 i++;
@@ -243,7 +248,23 @@ int parse_arg(int argc, const char *argv[])
             else {
                 platform_id_string = argv[i+1];
                 if (platform_id_string.length() > MAX_PATH) {
-                    fprintf(stderr, "Error: the platform ID's length should not more than 260 bytes.\n");
+                    fprintf(stderr, "Error: the platform ID's length should not be more than 260 bytes.\n");
+                    return -1;
+                }
+                i++;
+                continue;
+            }
+        }
+        else if (strncmp(argv[i], "-tcb_update_type",16) == 0) {
+            if (i == argc - 1 || argv[i+1][0] == '-') {
+                fprintf(stderr, "No tcb update type was provided for -tcb_update_type\n");
+                return -1;
+            }
+            else {
+                tcb_update_type_string = argv[i + 1];
+                std::transform(tcb_update_type_string.begin(), tcb_update_type_string.end(), tcb_update_type_string.begin(), toUpper);
+                if (!is_valid_tcb_update_type(tcb_update_type_string)) {
+                    fprintf(stderr, "Invalid tcb_update_type: %s\n", tcb_update_type_string.c_str());
                     return -1;
                 }
                 i++;
@@ -276,13 +297,6 @@ int send_collected_data_to_file(FILE* pFile, uint8_t* p_data_buffer, uint8_t* p_
     }
     else {
         // Output PCK Cert Retrieval Data
-#ifdef _MSC_VER
-        sgx_quote3_t* p_quote = (sgx_quote3_t*)(p_data_buffer);
-        sgx_ql_ecdsa_sig_data_t* p_sig_data = (sgx_ql_ecdsa_sig_data_t*)p_quote->signature_data;
-        sgx_ql_auth_data_t* p_auth_data = (sgx_ql_auth_data_t*)p_sig_data->auth_certification_data;
-        sgx_ql_certification_data_t* p_temp_cert_data = (sgx_ql_certification_data_t*)((uint8_t*)p_auth_data + sizeof(*p_auth_data) + p_auth_data->size);
-        p_data_buffer = p_temp_cert_data->certification_data;
-#endif
         uint64_t data_index = 0;
 #ifdef DEBUG
         PRINT_MESSAGE("EncPPID:\n");
@@ -297,12 +311,9 @@ int send_collected_data_to_file(FILE* pFile, uint8_t* p_data_buffer, uint8_t* p_
         data_index = data_index + CPU_SVN_LENGTH;
         PRINT_BYTE_ARRAY(stdout, p_data_buffer + data_index, ISV_SVN_LENGTH);
         PRINT_MESSAGE("\n PLATFORM_ID:\n");
-#ifdef _MSC_VER
-        PRINT_BYTE_ARRAY(stdout, &p_quote->header.user_data[0], DEFAULT_PLATFORM_ID_LENGTH);
-#else
+
         data_index = data_index + ISV_SVN_LENGTH;
         PRINT_BYTE_ARRAY(stdout, p_data_buffer, DEFAULT_PLATFORM_ID_LENGTH);
-#endif
         PRINT_MESSAGE("\n\n");
 #endif
         data_index = 0;
@@ -325,14 +336,9 @@ int send_collected_data_to_file(FILE* pFile, uint8_t* p_data_buffer, uint8_t* p_
         PRINT_BYTE_ARRAY(pFile, p_data_buffer + data_index, ISV_SVN_LENGTH);
         WRITE_COMMA;
 
-#ifdef _MSC_VER
-        //write qe_id to file
-        PRINT_BYTE_ARRAY(pFile, &p_quote->header.user_data[0], DEFAULT_PLATFORM_ID_LENGTH);
-#else
         data_index = data_index + ISV_SVN_LENGTH;
         //write qe_id to file
         PRINT_BYTE_ARRAY(pFile, p_data_buffer + data_index, DEFAULT_PLATFORM_ID_LENGTH);
-#endif   
     }
     //write platform manifest.
     if (platform_manifest_buffer_size > 0 ) {
@@ -377,25 +383,21 @@ cache_server_delivery_status_t send_collected_data_to_server(uint8_t* p_data_buf
         }
     }
     else {
-        // Output PCK Cert Retrieval Data
-#ifdef _MSC_VER
-        sgx_quote3_t* p_quote = (sgx_quote3_t*)(p_data_buffer);
-        sgx_ql_ecdsa_sig_data_t* p_sig_data = (sgx_ql_ecdsa_sig_data_t*)p_quote->signature_data;
-        sgx_ql_auth_data_t* p_auth_data = (sgx_ql_auth_data_t*)p_sig_data->auth_certification_data;
-        sgx_ql_certification_data_t* p_temp_cert_data = (sgx_ql_certification_data_t*)((uint8_t*)p_auth_data + sizeof(*p_auth_data) + p_auth_data->size);
-#endif
+        if(p_data_buffer == NULL) {
+            fprintf(stderr, "Error: the data buffer is NULL. \n");
+            return DELIVERY_FAIL;
+        }	
+         // Output PCK Cert Retrieval Data
         raw_data_size = platform_manifest_buffer_size + data_length_except_platform_manifest;
         raw_data = new (std::nothrow) uint8_t[raw_data_size];
         if (raw_data == NULL) {
             fprintf(stderr,"Error: Memory has been used up.\n");
             return DELIVERY_FAIL;
         }
+       
         memset(raw_data, 0x00, raw_data_size);
-#ifdef _MSC_VER
-        memcpy(raw_data, p_temp_cert_data->certification_data, sizeof(sgx_ql_ppid_rsa3072_encrypted_cert_info_t) + DEFAULT_PLATFORM_ID_LENGTH);
-#else
         memcpy(raw_data, p_data_buffer, data_length_except_platform_manifest);
-#endif
+
         if (platform_manifest_buffer_size > 0) { //for multi-package scenario
             memcpy(raw_data + data_length_except_platform_manifest, p_platform_manifest_buffer, platform_manifest_buffer_size);
         }
@@ -414,7 +416,7 @@ cache_server_delivery_status_t send_collected_data_to_server(uint8_t* p_data_buf
         delivery_status = DELIVERY_FAIL;
     }
     else {
-        fprintf(stderr, "Error: unexpected error happend during sending data to cache server.\n");
+        fprintf(stderr, "Error: unexpected error occurred while sending data to cache server.\n");
         delivery_status = DELIVERY_FAIL;
     }
 
@@ -520,12 +522,9 @@ int main(int argc, const char* argv[])
             // in this mode, if platform manifest is not availabe, just ignore it. 
             platform_manifest_out_buffer_size = 0;
         }
-#ifdef _MSC_VER
-        uint32_t quote_size = 0;
-        ret = generate_quote(&p_data_buffer, quote_size);
-#else
+
 	ret = collect_data(&p_data_buffer);
-#endif
+
         if (ret != 0) {
             if (NULL != p_data_buffer) {
                 free(p_data_buffer);

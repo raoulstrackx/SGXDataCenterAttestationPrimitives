@@ -32,11 +32,14 @@
 ######## SGX SDK Settings ########
 
 SGX_SDK ?= /opt/intel/sgxsdk
-SGX_MODE ?= HW
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 0
+SGX_QPL_LOGGING ?= 1
+QVL_ONLY ?= 0
 
-# Don't support 32bit in this sample
+
+# Don't support 32bit in this sample 
+
 SGX_COMMON_FLAGS := -m64
 SGX_LIBRARY_PATH := $(SGX_SDK)/lib64
 SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x64/sgx_sign
@@ -62,14 +65,16 @@ SGX_COMMON_CFLAGS := $(SGX_COMMON_FLAGS) -Wjump-misses-init -Wstrict-prototypes 
 SGX_COMMON_CXXFLAGS := $(SGX_COMMON_FLAGS) -Wnon-virtual-dtor -std=c++11
 
 ######## App Settings ########
-ifneq ($(SGX_MODE), HW)
-	Urts_Library_Name := sgx_urts_sim
-else
-	Urts_Library_Name := sgx_urts
-endif
+
+Urts_Library_Name := sgx_urts
+
 
 App_Cpp_Files := App/App.cpp
+ifeq ($(QVL_ONLY), 1)
+App_Include_Paths := -IApp
+else
 App_Include_Paths := -IApp -I$(SGX_SDK)/include
+endif
 
 App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -85,14 +90,29 @@ else
         App_C_Flags += -DNDEBUG -UEDEBUG -UDEBUG
 endif
 
-App_Cpp_Flags := $(App_C_Flags)
-App_Link_Flags := -L$(SGX_LIBRARY_PATH) -lsgx_dcap_quoteverify -l$(Urts_Library_Name) -lpthread -ldl
-
-ifneq ($(SGX_MODE), HW)
-	App_Link_Flags += -lsgx_uae_service_sim
-else
-	App_Link_Flags += -lsgx_uae_service
+ifeq ($(QVL_ONLY), 1)
+        App_C_Flags += -DQVL_ONLY
 endif
+
+App_Cpp_Flags := $(App_C_Flags)
+ifeq ($(QVL_ONLY), 1)
+App_Link_Flags := -L$(SGX_LIBRARY_PATH) -lsgx_dcap_quoteverify -lpthread -ldl
+else
+App_Link_Flags := -L$(SGX_LIBRARY_PATH) -lsgx_dcap_quoteverify -l$(Urts_Library_Name) -lpthread -ldl
+endif
+
+# Check if SGX_QPL_LOGGING is either 0 or 1 or 2
+ifeq ($(filter $(SGX_QPL_LOGGING),0 1 2),)
+    $(error SGX_QPL_LOGGING must be set to either 0 , 1 or 2.\
+			0 means disable QPL logging.\
+			1 means QPL logging error level.\
+			2 means QPL logging info level.)
+endif
+
+ifneq ($(SGX_QPL_LOGGING), 0)
+App_Link_Flags += -ldcap_quoteprov
+endif
+App_Cpp_Flags += -DSGX_QPL_LOGGING=$(SGX_QPL_LOGGING)
 
 App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
 
@@ -100,16 +120,12 @@ App_Name := app
 
 ######## Enclave Settings ########
 
-ifneq ($(SGX_MODE), HW)
-	Trts_Library_Name := sgx_trts_sim
-	Service_Library_Name := sgx_tservice_sim
-else
-	Trts_Library_Name := sgx_trts
-	Service_Library_Name := sgx_tservice
-endif
+
+Trts_Library_Name := sgx_trts
+Service_Library_Name := sgx_tservice
+
 Crypto_Library_Name := sgx_tcrypto
 DCAP_DIR  ?= ../../
-DCAP_QG_DIR  ?= $(DCAP_DIR)/QuoteGeneration/
 
 Enclave_Cpp_Files := Enclave/Enclave.cpp
 Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
@@ -148,8 +164,8 @@ Enclave_Cpp_Objects := $(sort $(Enclave_Cpp_Files:.cpp=.o))
 Enclave_Name := enclave.so
 Signed_Enclave_Name := enclave.signed.so
 Enclave_Config_File := Enclave/Enclave.config.xml
+Enclave_Test_Key := Enclave/Enclave_private_sample.pem
 
-ifeq ($(SGX_MODE), HW)
 ifeq ($(SGX_DEBUG), 1)
 	Build_Mode = HW_DEBUG
 else ifeq ($(SGX_PRERELEASE), 1)
@@ -157,21 +173,14 @@ else ifeq ($(SGX_PRERELEASE), 1)
 else
 	Build_Mode = HW_RELEASE
 endif
-else
-ifeq ($(SGX_DEBUG), 1)
-	Build_Mode = SIM_DEBUG
-else ifeq ($(SGX_PRERELEASE), 1)
-	Build_Mode = SIM_PRERELEASE
-else
-	Build_Mode = SIM_RELEASE
-endif
-endif
 
 
 .PHONY: all target run
 all: .config_$(Build_Mode)_$(SGX_ARCH)
 	@$(MAKE) target
-
+ifeq ($(QVL_ONLY), 1)
+target: $(App_Name)
+else
 ifeq ($(Build_Mode), HW_RELEASE)
 target:  $(App_Name) $(Enclave_Name)
 	@echo "The project has been built in release hardware mode."
@@ -179,21 +188,17 @@ target:  $(App_Name) $(Enclave_Name)
 	@echo "To sign the enclave use the command:"
 	@echo "   $(SGX_ENCLAVE_SIGNER) sign -key <your key> -enclave $(Enclave_Name) -out <$(Signed_Enclave_Name)> -config $(Enclave_Config_File)"
 	@echo "You can also sign the enclave using an external signing tool."
-	@echo "To build the project in simulation mode set SGX_MODE=SIM. To build the project in prerelease mode set SGX_PRERELEASE=1 and SGX_MODE=HW."
 
 
 else
 target: $(App_Name) $(Signed_Enclave_Name)
 ifeq ($(Build_Mode), HW_DEBUG)
 	@echo "The project has been built in debug hardware mode."
-else ifeq ($(Build_Mode), SIM_DEBUG)
-	@echo "The project has been built in debug simulation mode."
 else ifeq ($(Build_Mode), HW_PRERELEASE)
 	@echo "The project has been built in pre-release hardware mode."
-else ifeq ($(Build_Mode), SIM_PRERELEASE)
-	@echo "The project has been built in pre-release simulation mode."
 else
-	@echo "The project has been built in release simulation mode."
+	@echo "The project has been built in release mode."
+endif
 endif
 
 endif
@@ -201,7 +206,7 @@ endif
 run: all
 ifneq ($(Build_Mode), HW_RELEASE)
 	@$(CURDIR)/$(App_Name)
-	@echo "RUN  =>  $(App_Name) [$(SGX_MODE)|$(SGX_ARCH), OK]"
+	@echo "RUN  =>  $(App_Name) [$(SGX_ARCH), OK]"
 endif
 
 .config_$(Build_Mode)_$(SGX_ARCH):
@@ -220,11 +225,19 @@ App/Enclave_u.o: App/Enclave_u.c
 	@$(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@
 	@echo "CC   <=  $<"
 
+ifeq ($(QVL_ONLY), 1)
+App/%.o: App/%.cpp
+else
 App/%.o: App/%.cpp  App/Enclave_u.h
+endif
 	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@
 	@echo "CXX  <=  $<"
 
+ifeq ($(QVL_ONLY), 1)
+$(App_Name): $(App_Cpp_Objects)
+else
 $(App_Name): App/Enclave_u.o $(App_Cpp_Objects)
+endif
 	@$(CXX) $^ -o $@ $(App_Link_Flags)
 	@echo "LINK =>  $@"
 
@@ -249,7 +262,12 @@ $(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects)
 	echo "LINK =>  $@"
 
 $(Signed_Enclave_Name): $(Enclave_Name)
-	@$(SGX_ENCLAVE_SIGNER) sign -key Enclave/Enclave_private_sample.pem -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
+ifeq ($(wildcard $(Enclave_Test_Key)),)
+	@echo "There is no enclave test key<Enclave_private_sample.pem>."
+	@echo "The project will generate a key<Enclave_private_sample.pem> for test."
+	@openssl genrsa -out $(Enclave_Test_Key) -3 3072
+endif
+	@$(SGX_ENCLAVE_SIGNER) sign -key $(Enclave_Test_Key) -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
 	@echo "SIGN =>  $@"
 
 .PHONY: clean
