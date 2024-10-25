@@ -103,7 +103,6 @@ App_Include_Paths := -I$(SGX_SDK)/include -I ./App/inc
 App_Include_Paths += -I ../../QuoteGeneration/common/inc/internal 
 App_Include_Paths += -I ../../QuoteGeneration/ae/inc/internal -I ../SGXPlatformRegistration/include
 App_C_Flags := $(COMMON_FLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
-
 App_Cpp_Flags := $(App_C_Flags) -std=c++11
 App_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,-z,relro,-z,now,-z,noexecstack
 App_Link_Flags +=  -lcurl -ldl -lpthread
