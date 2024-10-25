@@ -293,10 +293,6 @@ sgx_status_t ide_get_pce_encrypt_key(
         p_rsa_pub_key->n[i] = *(p_temp + REF_RSA_OAEP_3072_MOD_SIZE - 1 - i); //create big endian n
     }
 
-//  p_rsa_pub_key = (pce_rsaoaep_3072_encrypt_pub_key_t*)p_public_key;
-//  memcpy(p_rsa_pub_key->e, g_ref_pubkey_e_be, sizeof(p_rsa_pub_key->e));
-//  memcpy(p_rsa_pub_key->n, g_ref_pubkey_n_be, sizeof(p_rsa_pub_key->n));
-
     // report_data = SHA256(crypto_suite||rsa_pub_key)||0-padding
     do {
         sgx_status = sgx_sha256_init(&sha_handle);

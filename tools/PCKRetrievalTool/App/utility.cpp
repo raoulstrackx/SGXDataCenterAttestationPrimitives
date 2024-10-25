@@ -49,11 +49,6 @@
 #endif
 #include "sgx_urts.h"     
 #include "utility.h"
-#include <openssl/rsa.h>     // For RSA functions
-#include <openssl/pem.h>
-#include <openssl/err.h>
-#include <iostream>
-#include <vector>
 
 #ifndef MAX_PATH
 #define MAX_PATH 260
