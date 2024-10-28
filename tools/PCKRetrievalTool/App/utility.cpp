@@ -632,8 +632,8 @@ int collect_data(uint8_t **pp_data_buffer)
     memcpy(p_temp , &(pce_info.pce_isvn), ISV_SVN_LENGTH);
     
     //platform id
-    p_temp = p_temp + ISV_SVN_LENGTH;
-    memcpy(p_temp , platform_id, DEFAULT_PLATFORM_ID_LENGTH);
+    p_temp = p_temp + ISV_SVN_LENGTH;	
+    memset(p_temp, 0, DEFAULT_PLATFORM_ID_LENGTH); 
 
     
 CLEANUP:
