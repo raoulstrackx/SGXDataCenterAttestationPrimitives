@@ -81,6 +81,28 @@ typedef struct _pce_rsaoaep_3072_encrypt_pub_key_t {
 
 static const char QE_ID_STRING[] = "QE_ID_DER";
 
+#define REF_N_SIZE_IN_UINT     REF_N_SIZE_IN_BYTES/sizeof(unsigned int)
+#define REF_E_SIZE_IN_UINT     REF_E_SIZE_IN_BYTES/sizeof(unsigned int)
+#define REF_D_SIZE_IN_UINT     REF_D_SIZE_IN_BYTES/sizeof(unsigned int)
+#define REF_P_SIZE_IN_UINT     REF_P_SIZE_IN_BYTES/sizeof(unsigned int)
+#define REF_Q_SIZE_IN_UINT     REF_Q_SIZE_IN_BYTES/sizeof(unsigned int)
+#define REF_DMP1_SIZE_IN_UINT  REF_DMP1_SIZE_IN_BYTES/sizeof(unsigned int)
+#define REF_DMQ1_SIZE_IN_UINT  REF_DMQ1_SIZE_IN_BYTES/sizeof(unsigned int)
+#define REF_IQMP_SIZE_IN_UINT  REF_IQMP_SIZE_IN_BYTES/sizeof(unsigned int)
+
+typedef struct _ref_rsa_params_t {
+    unsigned int n[REF_N_SIZE_IN_UINT];
+    unsigned int e[REF_E_SIZE_IN_UINT];
+    unsigned int d[REF_D_SIZE_IN_UINT];
+    unsigned int p[REF_P_SIZE_IN_UINT];
+    unsigned int q[REF_Q_SIZE_IN_UINT];
+    unsigned int dmp1[REF_DMP1_SIZE_IN_UINT];
+    unsigned int dmq1[REF_DMQ1_SIZE_IN_UINT];
+    unsigned int iqmp[REF_IQMP_SIZE_IN_UINT];
+}ref_rsa_params_t;
+
+static ref_rsa_params_t g_rsa_key = { 0 };  // The private key used to encrypt the PPID.  Only used for PPID_CEARTEXT Cert_Data_Type
+
 /**
  * The QE_ID is a platform ID that is not associated with a particular SVN but is dependent on the Quoting Enclave's
  * (QE) MRSIGNER and its Seal Key.  The QE_ID is designed to be dependent on the seal key which is dependent on the
@@ -237,10 +259,39 @@ sgx_status_t ide_get_pce_encrypt_key(
         return(SGX_ERROR_INVALID_PARAMETER);
     }
 
-    // Raoul: (2) You should be able to remove these memcpy's. That will modify the enclave measurement, but that doesn't seem to matter. It can even be a debug enclave, but this code needs to run inside of an enclave because you need to be able to create the sgx report for the PCE enclave. That requires an instruction that only works inside of an enclave.
+    g_rsa_key.e[0] = 0x10001;
     p_rsa_pub_key = (pce_rsaoaep_3072_encrypt_pub_key_t*)p_public_key;
-    memcpy(p_rsa_pub_key->e, g_ref_pubkey_e_be, sizeof(p_rsa_pub_key->e));
-    memcpy(p_rsa_pub_key->n, g_ref_pubkey_n_be, sizeof(p_rsa_pub_key->n));
+    //todo: Currenlty, the private key is stored temporarily in enclave global memory long enough
+    // to last between get_pce_encrypt_key() and store_cert_data().  These calls surround the call to the PCE
+    // get_pce_info() API.  There is a risk that if the enclave is unloaded directly or indirectly (by power state
+    // change) the private key will be lost.  There should be more documentation about this situation w/r/t
+    // detection and recovery.  Or, if that is not sufficient, then provide a way to store the key in the ECDSA
+    // blob.  Since PPID_CLEARTEXT cert_key_type is not supported at this time, we can push the solution for later.
+    sgx_status = sgx_create_rsa_key_pair(REF_RSA_OAEP_3072_MOD_SIZE,
+                                         REF_RSA_OAEP_3072_EXP_SIZE,
+                                         (unsigned char*)g_rsa_key.n,
+                                         (unsigned char*)g_rsa_key.d,
+                                         (unsigned char*)g_rsa_key.e,
+                                         (unsigned char*)g_rsa_key.p,
+                                         (unsigned char*)g_rsa_key.q,
+                                         (unsigned char*)g_rsa_key.dmp1,
+                                         (unsigned char*)g_rsa_key.dmq1,
+                                         (unsigned char*)g_rsa_key.iqmp);
+    if (sgx_status != SGX_SUCCESS) {
+        return sgx_status;
+    }
+
+    // PCE wants the key in big endian
+    size_t i;
+    uint8_t* p_temp;
+    p_temp = (uint8_t*)g_rsa_key.e;
+    for (i = 0; i < REF_RSA_OAEP_3072_EXP_SIZE; i++) {
+        p_rsa_pub_key->e[i] = *(p_temp + REF_RSA_OAEP_3072_EXP_SIZE - 1 - i); //create big endian e
+    }
+    p_temp = (uint8_t*)g_rsa_key.n;
+    for (i = 0; i < REF_RSA_OAEP_3072_MOD_SIZE; i++) {
+        p_rsa_pub_key->n[i] = *(p_temp + REF_RSA_OAEP_3072_MOD_SIZE - 1 - i); //create big endian n
+    }
 
     // Raoul: (3) You'll need something like this. The PCE enclave requires that you pass in a report specifically designed for it. sgx reports can be used to sign something for a particular enclave. It's the key part of local attestation, and a way to set up a secure channel between two enclaves on the same platform. For us it wouldn't be required, but we have no choice since we can't modify the PCE enclave.
     // report_data = SHA256(crypto_suite||rsa_pub_key)||0-padding
@@ -288,6 +339,62 @@ ret_point:
     if (sha_handle != NULL) {
         sgx_sha256_close(sha_handle);
     }
+
+    return sgx_status;
+}
+
+sgx_status_t ide_decrypt_ppid(uint32_t encrypted_ppid_size, uint8_t *p_encrypted_ppid, uint8_t* ppid)
+{
+    sgx_status_t sgx_status = SGX_SUCCESS;
+    void *rsa_key = NULL;
+    unsigned char* dec_dat = NULL;
+    size_t ppid_size = 0;
+    // Decrypt the PPID with the RSA private key generated with the new key and store it in the blob
+    // Create a private key context
+    /// todo: add a check to see if the private key was lost due to enlave unload or power loss.
+    sgx_status = sgx_create_rsa_priv2_key(REF_RSA_OAEP_3072_MOD_SIZE,
+                                                REF_E_SIZE_IN_BYTES,
+                                                (const unsigned char*)g_rsa_key.e,
+                                                (const unsigned char*)g_rsa_key.p,
+                                                (const unsigned char*)g_rsa_key.q,
+                                                (const unsigned char*)g_rsa_key.dmp1,
+                                                (const unsigned char*)g_rsa_key.dmq1,
+                                                (const unsigned char*)g_rsa_key.iqmp,
+                                                &rsa_key);
+
+    if (sgx_status != SGX_SUCCESS) {
+        return sgx_status;
+    }
+
+    sgx_status = sgx_rsa_priv_decrypt_sha256(rsa_key,
+                                             NULL,
+                                             (&ppid_size),
+                                             p_encrypted_ppid,
+                                             REF_RSA_OAEP_3072_MOD_SIZE);
+
+    if (sgx_status != SGX_SUCCESS) {
+        return sgx_status;
+    }
+
+    //if (sizeof(ciphertext_data.ppid) < ppid_size) {
+    //    ret = REFQE3_ERROR_CRYPTO;
+    //    goto ret_point;
+    //}
+    if (!(dec_dat = (unsigned char*)malloc(ppid_size))) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+    sgx_status = sgx_rsa_priv_decrypt_sha256(rsa_key,
+                                                   dec_dat,
+                                                   (&ppid_size),
+                                                   p_encrypted_ppid,
+                                                   REF_RSA_OAEP_3072_MOD_SIZE);
+
+    if (sgx_status != SGX_SUCCESS) {
+        return sgx_status;
+    }
+
+    // Copy in the decrypted PPID
+    memcpy(ppid, dec_dat, 16);
 
     return sgx_status;
 }

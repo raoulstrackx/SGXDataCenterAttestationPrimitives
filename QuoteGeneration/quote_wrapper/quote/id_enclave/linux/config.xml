@@ -1,14 +1,17 @@
 <EnclaveConfiguration>
-    <IntelSigned>1</IntelSigned>
+    <IntelSigned>0</IntelSigned>
     <ProvisionKey>1</ProvisionKey>
     <ProdID>0x1</ProdID>
     <ISVSVN>5</ISVSVN>
     <TCSNum>1</TCSNum>
     <TCSPolicy>1</TCSPolicy>
     <HW>0</HW>
-    <StackMaxSize>0x2000</StackMaxSize>
-    <StackMinSize>0x2000</StackMinSize>
-    <HeapMaxSize>0x1000</HeapMaxSize>
-    <DisableDebug>1</DisableDebug>
-    <EnableIPPFIPS>1</EnableIPPFIPS>
+    <StackMaxSize>0x20000</StackMaxSize>
+    <StackMinSize>0x20000</StackMinSize>
+    <HeapInitSize>0x100000</HeapInitSize>
+    <HeapMinSize>0x1000</HeapMinSize>
+    <HeapMaxSize>0x100000</HeapMaxSize>
+    <DisableDebug>0</DisableDebug>
+    <EnableIPPFIPS>0</EnableIPPFIPS>
 </EnclaveConfiguration>
+

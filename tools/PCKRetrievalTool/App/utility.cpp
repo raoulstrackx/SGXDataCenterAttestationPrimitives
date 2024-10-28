@@ -464,7 +464,13 @@ uefi_status_t set_registration_status()
     return ret;
 }
 
-
+void print_decrypted_ppid(unsigned char decrypted_ppid[], size_t length) {
+    printf("Decrypted PPID: ");
+    for (size_t i = 0; i < length; ++i) {
+        printf("%02x", decrypted_ppid[i]); // Print each byte in hex
+    }
+    printf("\n");
+}
 
 int collect_data(uint8_t **pp_data_buffer)
 {
@@ -477,7 +483,7 @@ int collect_data(uint8_t **pp_data_buffer)
 
     sgx_enclave_id_t pce_enclave_eid = 0;
     sgx_enclave_id_t id_enclave_eid = 0;
-    
+
     sgx_report_t id_enclave_report;
     uint32_t enc_key_size = REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE;
     uint8_t enc_public_key[REF_RSA_OAEP_3072_MOD_SIZE + REF_RSA_OAEP_3072_EXP_SIZE];
@@ -488,6 +494,7 @@ int collect_data(uint8_t **pp_data_buffer)
     sgx_target_info_t pce_target_info;
 
     sgx_get_target_info_func_t p_sgx_get_target_info = NULL;
+    uint8_t decrypted_ppid[16];
 
     bool load_flag = get_urts_library_handle();
     if(false == load_flag) {// can't find urts shared library to load enclave
@@ -590,6 +597,15 @@ int collect_data(uint8_t **pp_data_buffer)
         goto CLEANUP;
     }
 
+    sgx_status = ide_decrypt_ppid(id_enclave_eid, &ecall_ret, ENCRYPTED_PPID_LENGTH, encrypted_ppid, decrypted_ppid);
+    if (SGX_SUCCESS != sgx_status) {
+        fprintf(stderr, "Failed to call into the ID_ENCLAVE: ide_decrypt_ppid. The error code is: 0x%04x.\n", sgx_status);
+        ret = -1;
+        goto CLEANUP;
+    }
+
+    print_decrypted_ppid(decrypted_ppid, sizeof(decrypted_ppid));
+
     buffer_size = ENCRYPTED_PPID_LENGTH + CPU_SVN_LENGTH + ISV_SVN_LENGTH + PCE_ID_LENGTH + DEFAULT_PLATFORM_ID_LENGTH;
     *pp_data_buffer = (uint8_t *) malloc(buffer_size);
 
@@ -616,8 +632,8 @@ int collect_data(uint8_t **pp_data_buffer)
     memcpy(p_temp , &(pce_info.pce_isvn), ISV_SVN_LENGTH);
     
     //platform id
-    p_temp = p_temp + ISV_SVN_LENGTH;
-    memcpy(p_temp , platform_id, DEFAULT_PLATFORM_ID_LENGTH);
+    p_temp = p_temp + ISV_SVN_LENGTH;	
+    memset(p_temp, 0, DEFAULT_PLATFORM_ID_LENGTH); 
 
     
 CLEANUP:
