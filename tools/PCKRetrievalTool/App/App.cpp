@@ -313,7 +313,7 @@ int send_collected_data_to_file(FILE* pFile, uint8_t* p_data_buffer, uint8_t* p_
         PRINT_MESSAGE("\n PLATFORM_ID:\n");
 
         data_index = data_index + ISV_SVN_LENGTH;
-        PRINT_BYTE_ARRAY(stdout, p_data_buffer, DEFAULT_PLATFORM_ID_LENGTH);
+        PRINT_BYTE_ARRAY(stdout, p_data_buffer + data_index, DEFAULT_PLATFORM_ID_LENGTH);
         PRINT_MESSAGE("\n\n");
 #endif
         data_index = 0;
